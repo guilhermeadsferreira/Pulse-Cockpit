@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg:             #0B0D11;
+  --surface:        #131720;
+  --surface-2:      #1A2030;
+  --surface-3:      #222840;
+  --border:         #252D40;
+  --border-subtle:  #1C2238;
+  --text-primary:   #DCE2EF;
+  --text-secondary: #5E6E96;
+  --text-muted:     #363F58;
+  --accent:         #C0873A;
+  --green:          #3A9A65;
+  --amber:          #C88A20;
+  --yellow:         #D4A843;
+  --red:            #B84040;
+  --blue:           #4080A8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar       { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 2px; }
+
+/* Animations */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Electron drag region */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}

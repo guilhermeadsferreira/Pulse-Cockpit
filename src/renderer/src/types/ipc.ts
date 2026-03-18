@@ -1,0 +1,116 @@
+// Shared types between main process and renderer.
+// Keep this file free of Node.js-only imports.
+
+export interface AppSettings {
+  workspacePath: string
+  claudeBinPath: string
+  alert1on1Days: number
+}
+
+export type PersonLevel   = 'junior' | 'pleno' | 'senior' | 'staff' | 'principal' | 'manager'
+export type PersonRelacao = 'liderado' | 'par' | 'gestor' | 'stakeholder'
+export type PDIStatus     = 'nao_iniciado' | 'em_andamento' | 'concluido'
+export type HealthStatus  = 'verde' | 'amarelo' | 'vermelho'
+
+export interface PDIItem {
+  objetivo: string
+  status:   PDIStatus
+  prazo?:   string
+}
+
+export interface PersonConfig {
+  schema_version:        number
+  nome:                  string
+  slug:                  string
+  cargo:                 string
+  nivel:                 PersonLevel
+  area?:                 string
+  squad?:                string
+  relacao:               PersonRelacao
+  inicio_na_funcao?:     string
+  inicio_na_empresa?:    string
+  frequencia_1on1_dias:  number
+  em_processo_promocao:  boolean
+  objetivo_cargo_alvo?:  string
+  pdi:                   PDIItem[]
+  notas_manuais?:        string
+  alerta_ativo:          boolean
+  motivo_alerta?:        string
+  criado_em:             string
+  atualizado_em:         string
+}
+
+export interface ArtifactMeta {
+  path:      string
+  fileName:  string
+  tipo:      string
+  date:      string
+}
+
+export interface PerfilFrontmatter {
+  slug:                  string
+  schema_version:        number
+  ultima_atualizacao:    string
+  total_artefatos:       number
+  ultimo_1on1:           string | null
+  acoes_pendentes_count: number
+  alertas_ativos:        string[]
+  saude:                 'verde' | 'amarelo' | 'vermelho'
+}
+
+export interface PerfilData {
+  raw:          string
+  frontmatter:  Partial<PerfilFrontmatter>
+}
+
+export type QueueItemStatus = 'queued' | 'processing' | 'done' | 'pending' | 'error'
+
+export interface QueueItem {
+  id:                    string
+  filePath:              string
+  fileName:              string
+  status:                QueueItemStatus
+  personSlug?:           string
+  tipo?:                 string
+  summary?:              string
+  error?:                string
+  startedAt?:            number
+  finishedAt?:           number
+  // People detected by AI
+  pessoasIdentificadas?: string[]              // all slugs mentioned in the artifact
+  naoCadastradas?:       string[]              // slugs that Claude found but aren't in the registry
+  novasNomes?:           Record<string, string> // slug → nome for detected people
+}
+
+export interface IngestionEvent {
+  filePath: string
+  fileName: string
+}
+
+export interface IngestionResult {
+  filePath:     string
+  personSlug?:  string
+  tipo:         string
+  summary:      string
+}
+
+export interface IngestionError {
+  filePath:    string
+  error:       string
+  rawOutput?:  string
+}
+
+export interface DetectedPerson {
+  slug:         string
+  nome:         string
+  firstSeen:    string
+  lastSeen:     string
+  mentionCount: number
+  sourceFiles:  string[]
+}
+
+export interface CycleReportParams {
+  personSlug:    string
+  periodoInicio: string
+  periodoFim:    string
+}
