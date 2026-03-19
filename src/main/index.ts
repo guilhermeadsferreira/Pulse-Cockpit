@@ -4,6 +4,7 @@ import { writeFileSync, readFileSync } from 'fs'
 import { SettingsManager } from './registry/SettingsManager'
 import { PersonRegistry } from './registry/PersonRegistry'
 import { DetectedRegistry } from './registry/DetectedRegistry'
+import { ActionRegistry } from './registry/ActionRegistry'
 import { setupWorkspace } from './workspace/WorkspaceSetup'
 import { runClaudePrompt } from './ingestion/ClaudeRunner'
 import { FileWatcher } from './ingestion/FileWatcher'
@@ -219,6 +220,17 @@ function registerIpcHandlers(): void {
     writeFileSync(filePath, markdown, 'utf-8')
 
     return { success: true, path: filePath, markdown, result: cycleResult }
+  })
+
+  // ── Actions ───────────────────────────────────────────────
+  ipcMain.handle('actions:list', (_event, slug: string) => {
+    const { workspacePath } = SettingsManager.load()
+    return new ActionRegistry(workspacePath).list(slug)
+  })
+
+  ipcMain.handle('actions:update-status', (_event, slug: string, id: string, status: string) => {
+    const { workspacePath } = SettingsManager.load()
+    new ActionRegistry(workspacePath).updateStatus(slug, id, status as 'open' | 'done' | 'cancelled')
   })
 
   // ── Shell ─────────────────────────────────────────────────

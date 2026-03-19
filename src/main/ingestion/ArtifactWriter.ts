@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, renameSync, copyFileSync } from 'fs'
 import { join } from 'path'
 import type { IngestionAIResult } from '../prompts/ingestion.prompt'
+import { ActionRegistry } from '../registry/ActionRegistry'
 
 const SECTION = {
   resumo:    { open: '<!-- BLOCO GERENCIADO PELA IA — reescrito a cada ingestão -->',     close: '<!-- FIM DO BLOCO GERENCIADO -->' },
@@ -16,9 +17,11 @@ const SECTION = {
  */
 export class ArtifactWriter {
   private pessoasDir: string
+  private actionRegistry: ActionRegistry
 
   constructor(workspacePath: string) {
     this.pessoasDir = join(workspacePath, 'pessoas')
+    this.actionRegistry = new ActionRegistry(workspacePath)
   }
 
   /**
@@ -84,6 +87,12 @@ export class ArtifactWriter {
     lines.push(rawContent.trim())
 
     writeFileSync(dest, lines.join('\n'), 'utf-8')
+
+    // Create action entities from acoes_comprometidas
+    if (result.acoes_comprometidas.length > 0) {
+      this.actionRegistry.createFromArtifact(slug, result.acoes_comprometidas, fileName, result.data_artefato)
+    }
+
     return fileName
   }
 
@@ -143,6 +152,10 @@ alertas_ativos: []
 saude: "${result.indicador_saude}"
 necessita_1on1: ${result.necessita_1on1 ?? false}
 motivo_1on1: ${result.motivo_1on1 ? `"${result.motivo_1on1}"` : 'null'}
+alerta_estagnacao: ${result.alerta_estagnacao ?? false}
+motivo_estagnacao: ${result.motivo_estagnacao ? `"${result.motivo_estagnacao}"` : 'null'}
+sinal_evolucao: ${result.sinal_evolucao ?? false}
+evidencia_evolucao: ${result.evidencia_evolucao ? `"${result.evidencia_evolucao}"` : 'null'}
 ---
 
 # Perfil Vivo — ${slug}
@@ -249,6 +262,26 @@ ${SECTION.historico.close}
       fm = fm.replace(/motivo_1on1:.*/, `motivo_1on1: ${motivo}`)
     } else {
       fm += `\nnecessita_1on1: ${necessita}\nmotivo_1on1: ${motivo}`
+    }
+
+    // alerta_estagnacao + motivo_estagnacao
+    const estagnacao       = result.alerta_estagnacao ?? false
+    const motivoEstagnacao = result.motivo_estagnacao ? `"${result.motivo_estagnacao}"` : 'null'
+    if (/alerta_estagnacao:/.test(fm)) {
+      fm = fm.replace(/alerta_estagnacao:.*/, `alerta_estagnacao: ${estagnacao}`)
+      fm = fm.replace(/motivo_estagnacao:.*/, `motivo_estagnacao: ${motivoEstagnacao}`)
+    } else {
+      fm += `\nalerta_estagnacao: ${estagnacao}\nmotivo_estagnacao: ${motivoEstagnacao}`
+    }
+
+    // sinal_evolucao + evidencia_evolucao
+    const evolucao         = result.sinal_evolucao ?? false
+    const evidencia        = result.evidencia_evolucao ? `"${result.evidencia_evolucao}"` : 'null'
+    if (/sinal_evolucao:/.test(fm)) {
+      fm = fm.replace(/sinal_evolucao:.*/, `sinal_evolucao: ${evolucao}`)
+      fm = fm.replace(/evidencia_evolucao:.*/, `evidencia_evolucao: ${evidencia}`)
+    } else {
+      fm += `\nsinal_evolucao: ${evolucao}\nevidencia_evolucao: ${evidencia}`
     }
 
     // acoes_pendentes_count: recalculate from block

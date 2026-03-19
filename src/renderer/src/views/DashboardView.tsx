@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { UserPlus, Pencil, ChevronRight, X, UserCheck, AlertCircle } from 'lucide-react'
+import { UserPlus, Pencil, ChevronRight, X, UserCheck, AlertCircle, TrendingDown, TrendingUp } from 'lucide-react'
 import { useRouter } from '../router'
 import type { PersonConfig, PerfilFrontmatter, DetectedPerson } from '../types/ipc'
-import { labelNivel, labelRelacao } from '../lib/utils'
+import { labelNivel, labelRelacao, daysSince } from '../lib/utils'
 
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -319,6 +319,59 @@ function PersonCard({
             >
               <AlertCircle size={9} />
               1:1
+            </span>
+          )}
+          {/* Negligência: no updates in 30+ days */}
+          {perfil.ultima_atualizacao && daysSince(perfil.ultima_atualizacao) > 30 && (
+            <span
+              title={`Sem atividade há ${daysSince(perfil.ultima_atualizacao)} dias`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', borderRadius: 20,
+                background: 'rgba(100,120,160,0.1)',
+                border: '1px solid rgba(100,120,160,0.3)',
+                color: 'var(--text-muted)',
+                alignSelf: 'center', cursor: 'default',
+              }}
+            >
+              {daysSince(perfil.ultima_atualizacao)}d sem atividade
+            </span>
+          )}
+          {/* Estagnação */}
+          {perfil.alerta_estagnacao && (
+            <span
+              title={perfil.motivo_estagnacao ?? 'Sinal de estagnação detectado'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', borderRadius: 20,
+                background: 'rgba(180,100,40,0.1)',
+                border: '1px solid rgba(180,100,40,0.3)',
+                color: '#b46428',
+                alignSelf: 'center', cursor: 'default',
+              }}
+            >
+              <TrendingDown size={9} />
+              estagnação
+            </span>
+          )}
+          {/* Evolução comprovada */}
+          {perfil.sinal_evolucao && (
+            <span
+              title={perfil.evidencia_evolucao ?? 'Sinal de evolução detectado'}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 3,
+                fontSize: 10, fontWeight: 600,
+                padding: '2px 7px', borderRadius: 20,
+                background: 'rgba(40,140,80,0.1)',
+                border: '1px solid rgba(40,140,80,0.3)',
+                color: 'var(--green)',
+                alignSelf: 'center', cursor: 'default',
+              }}
+            >
+              <TrendingUp size={9} />
+              evolução
             </span>
           )}
         </div>

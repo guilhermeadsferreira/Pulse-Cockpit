@@ -37,6 +37,11 @@ contextBridge.exposeInMainWorld('api', {
     dismiss: (slug: string) => ipcRenderer.invoke('detected:dismiss', slug),
   },
 
+  actions: {
+    list:         (slug: string)                              => ipcRenderer.invoke('actions:list', slug),
+    updateStatus: (slug: string, id: string, status: string) => ipcRenderer.invoke('actions:update-status', slug, id, status),
+  },
+
   shell: {
     open: (filePath: string) => ipcRenderer.invoke('shell:open', filePath),
   },

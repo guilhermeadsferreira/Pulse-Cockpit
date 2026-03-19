@@ -1,4 +1,4 @@
-import type { AppSettings, PersonConfig, ArtifactMeta, PerfilData, QueueItem, CycleReportParams, DetectedPerson, PautaMeta } from './ipc'
+import type { AppSettings, PersonConfig, ArtifactMeta, PerfilData, QueueItem, CycleReportParams, DetectedPerson, PautaMeta, Action, ActionStatus } from './ipc'
 
 declare global {
   interface Window {
@@ -45,6 +45,11 @@ declare global {
       detected: {
         list:    () => Promise<DetectedPerson[]>
         dismiss: (slug: string) => Promise<void>
+      }
+
+      actions: {
+        list:         (slug: string) => Promise<Action[]>
+        updateStatus: (slug: string, id: string, status: ActionStatus) => Promise<void>
       }
 
       shell: {

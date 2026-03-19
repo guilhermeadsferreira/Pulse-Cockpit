@@ -49,6 +49,10 @@ Regras obrigatórias:
 - "motivo_indicador": 1 frase explicando o indicador de saúde
 - "necessita_1on1": true se este artefato evidencia que um 1:1 é urgente. Marque true quando houver qualquer um destes sinais: bloqueio sem resolução aparente, tema sensível (carreira, saúde, conflito interpessoal), ação comprometida há muito tempo sem follow-up, ou indicador amarelo/vermelho com causa identificada. Para 1:1s já realizados neste artefato, retorne false (o 1:1 já aconteceu). Caso contrário, false.
 - "motivo_1on1": se necessita_1on1 for true, 1 frase curta descrevendo o motivo (ex: "Bloqueio técnico sem resolução há 2 semanas"). Se false, null.
+- "alerta_estagnacao": true se o perfil histórico combinado com este artefato sugere que a pessoa está estagnada — sem crescimento técnico, sem novos desafios, sem avanço no PDI, sem conquistas recentes. Se não há histórico suficiente para avaliar, retorne false.
+- "motivo_estagnacao": se alerta_estagnacao for true, 1 frase descrevendo o padrão detectado (ex: "Sem novas entregas ou aprendizados registrados nos últimos 3 meses"). Se false, null.
+- "sinal_evolucao": true se este artefato traz evidência clara de crescimento, aprendizado ou evolução em relação ao perfil anterior (nova habilidade demonstrada, entrega significativa, feedback positivo de terceiros, avanço no PDI).
+- "evidencia_evolucao": se sinal_evolucao for true, 1 frase descrevendo a evidência (ex: "Liderou sozinho a refatoração do serviço de auth e recebeu elogio do time"). Se false, null.
 
 JSON esperado:
 {
@@ -67,7 +71,11 @@ JSON esperado:
   "indicador_saude": "verde|amarelo|vermelho",
   "motivo_indicador": "string",
   "necessita_1on1": true | false,
-  "motivo_1on1": "string ou null"
+  "motivo_1on1": "string ou null",
+  "alerta_estagnacao": true | false,
+  "motivo_estagnacao": "string ou null",
+  "sinal_evolucao": true | false,
+  "evidencia_evolucao": "string ou null"
 }`
 }
 
@@ -88,4 +96,8 @@ export interface IngestionAIResult {
   motivo_indicador: string
   necessita_1on1: boolean
   motivo_1on1: string | null
+  alerta_estagnacao: boolean
+  motivo_estagnacao: string | null
+  sinal_evolucao: boolean
+  evidencia_evolucao: string | null
 }

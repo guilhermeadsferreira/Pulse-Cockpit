@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, FileText, CalendarDays, Pencil, ExternalLink, RefreshCw, Loader2 } from 'lucide-react'
+import { ArrowLeft, FileText, CalendarDays, Pencil, ExternalLink, RefreshCw, Loader2, CheckSquare, Square, X } from 'lucide-react'
 import { useRouter } from '../router'
-import type { PersonConfig, PerfilData, ArtifactMeta, PautaMeta, AgendaResult } from '../types/ipc'
+import type { PersonConfig, PerfilData, ArtifactMeta, PautaMeta, AgendaResult, Action } from '../types/ipc'
 import { MarkdownPreview } from '../components/MarkdownPreview'
-import { labelNivel, labelRelacao, labelSaude, labelTipo } from '../lib/utils'
+import { labelNivel, labelRelacao, labelSaude, labelTipo, fmtDate as fmtDateUtil } from '../lib/utils'
 import { CycleTab } from './CycleReportView'
 
 // Styles declared at module top level so all sub-components can access them safely
@@ -53,7 +53,8 @@ export function PersonView() {
   const [perfil,        setPerfil]        = useState<PerfilData | null>(null)
   const [artifacts,     setArtifacts]     = useState<ArtifactMeta[]>([])
   const [pautas,        setPautas]        = useState<PautaMeta[]>([])
-  const [activeTab,     setActiveTab]     = useState<'perfil' | 'artefatos' | 'pautas' | 'ciclo'>('perfil')
+  const [activeTab,     setActiveTab]     = useState<'perfil' | 'artefatos' | 'pautas' | 'acoes' | 'ciclo'>('perfil')
+  const [actions,       setActions]       = useState<Action[]>([])
   const [generatingAgenda, setGeneratingAgenda] = useState(false)
   const [agendaError,   setAgendaError]   = useState<string | null>(null)
 
@@ -71,17 +72,26 @@ export function PersonView() {
     setPautas(p)
   }, [])
 
+  const loadActions = useCallback(async (slug: string) => {
+    const a = await window.api.actions.list(slug)
+    setActions(a)
+  }, [])
+
   useEffect(() => {
     window.api.people.get(params.slug).then(setPerson)
     loadPerfil(params.slug)
     loadPautas(params.slug)
-  }, [params.slug, loadPerfil, loadPautas])
+    loadActions(params.slug)
+  }, [params.slug, loadPerfil, loadPautas, loadActions])
 
   // Refresh on ingestion completed
   useEffect(() => {
-    window.api.ingestion.onCompleted(() => loadPerfil(params.slug))
+    window.api.ingestion.onCompleted(() => {
+      loadPerfil(params.slug)
+      loadActions(params.slug)
+    })
     return () => window.api.ingestion.removeListeners()
-  }, [params.slug, loadPerfil])
+  }, [params.slug, loadPerfil, loadActions])
 
   async function handleGenerateAgenda() {
     if (!person) return
@@ -209,6 +219,7 @@ export function PersonView() {
                   { id: 'perfil',    label: 'Perfil vivo' },
                   { id: 'artefatos', label: 'Artefatos' },
                   { id: 'pautas',    label: 'Pautas' },
+                  { id: 'acoes',     label: 'Ações' },
                   { id: 'ciclo',     label: 'Relatório de Ciclo' },
                 ] as const).map(({ id, label }) => (
                   <button
@@ -236,6 +247,11 @@ export function PersonView() {
                         {pautas.length}
                       </span>
                     )}
+                    {id === 'acoes' && actions.filter(a => a.status === 'open').length > 0 && (
+                      <span style={{ marginLeft: 6, fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--red)' }}>
+                        {actions.filter(a => a.status === 'open').length}
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -252,6 +268,15 @@ export function PersonView() {
               {activeTab === 'perfil'    && <PerfilTab perfil={perfil} />}
               {activeTab === 'artefatos' && <ArtifactsTab artifacts={artifacts} />}
               {activeTab === 'pautas'    && <PautasTab pautas={pautas} onGenerate={handleGenerateAgenda} generating={generatingAgenda} hasPerfil={!!perfil} />}
+              {activeTab === 'acoes'     && (
+                <AcoesTab
+                  actions={actions}
+                  onUpdateStatus={async (id, status) => {
+                    await window.api.actions.updateStatus(person.slug, id, status)
+                    loadActions(person.slug)
+                  }}
+                />
+              )}
               {activeTab === 'ciclo'     && <CycleTab slug={person.slug} person={person} />}
             </div>
 
@@ -552,6 +577,131 @@ function PautaCard({ pauta: p }: { pauta: PautaMeta }) {
         <div style={{ padding: '16px 18px', borderTop: '1px solid var(--border-subtle)' }}>
           <MarkdownPreview content={content} maxHeight={560} />
         </div>
+      )}
+    </div>
+  )
+}
+
+// ── Ações tab ──────────────────────────────────────────────────────────────────
+
+function AcoesTab({
+  actions,
+  onUpdateStatus,
+}: {
+  actions: Action[]
+  onUpdateStatus: (id: string, status: 'open' | 'done' | 'cancelled') => Promise<void>
+}) {
+  if (actions.length === 0) {
+    return (
+      <PlaceholderTab
+        icon={<CheckSquare size={28} />}
+        title="Ações"
+        desc="Ações comprometidas nos artefatos aparecerão aqui automaticamente após a ingestão."
+        fase="Aguardando ingestão"
+      />
+    )
+  }
+
+  const open      = actions.filter((a) => a.status === 'open')
+  const done      = actions.filter((a) => a.status === 'done')
+  const cancelled = actions.filter((a) => a.status === 'cancelled')
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {open.length > 0 && (
+        <PerfilSection title={`Em aberto (${open.length})`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {open.map((a) => (
+              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
+            ))}
+          </div>
+        </PerfilSection>
+      )}
+      {done.length > 0 && (
+        <PerfilSection title={`Concluídas (${done.length})`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {done.map((a) => (
+              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
+            ))}
+          </div>
+        </PerfilSection>
+      )}
+      {cancelled.length > 0 && (
+        <PerfilSection title={`Canceladas (${cancelled.length})`}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {cancelled.map((a) => (
+              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
+            ))}
+          </div>
+        </PerfilSection>
+      )}
+    </div>
+  )
+}
+
+function ActionRow({
+  action: a,
+  onUpdateStatus,
+}: {
+  action: Action
+  onUpdateStatus: (id: string, status: 'open' | 'done' | 'cancelled') => Promise<void>
+}) {
+  const isDone      = a.status === 'done'
+  const isCancelled = a.status === 'cancelled'
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '8px 0', borderBottom: '1px solid var(--border-subtle)',
+    }}>
+      <button
+        onClick={() => onUpdateStatus(a.id, isDone ? 'open' : 'done')}
+        title={isDone ? 'Reabrir' : 'Marcar como concluída'}
+        style={{
+          background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+          color: isDone ? 'var(--accent)' : 'var(--border)',
+          flexShrink: 0, marginTop: 1,
+        }}
+      >
+        {isDone ? <CheckSquare size={15} /> : <Square size={15} />}
+      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontSize: 13, color: isDone || isCancelled ? 'var(--text-muted)' : 'var(--text-primary)',
+          textDecoration: isDone || isCancelled ? 'line-through' : 'none',
+          lineHeight: 1.5,
+        }}>
+          {a.texto}
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+          {a.fonteArtefato && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              {a.fonteArtefato}
+            </span>
+          )}
+          {a.criadoEm && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+              {fmtDateUtil(a.criadoEm)}
+            </span>
+          )}
+          {a.concluidoEm && (
+            <span style={{ fontSize: 10, color: 'var(--green)' }}>
+              concluída {fmtDateUtil(a.concluidoEm)}
+            </span>
+          )}
+        </div>
+      </div>
+      {!isCancelled && (
+        <button
+          onClick={() => onUpdateStatus(a.id, a.status === 'cancelled' ? 'open' : 'cancelled')}
+          title="Cancelar"
+          style={{
+            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+            color: 'var(--text-muted)', flexShrink: 0,
+          }}
+        >
+          <X size={13} />
+        </button>
       )}
     </div>
   )

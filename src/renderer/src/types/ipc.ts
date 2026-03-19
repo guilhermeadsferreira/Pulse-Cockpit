@@ -60,6 +60,23 @@ export interface PerfilFrontmatter {
   saude:                 'verde' | 'amarelo' | 'vermelho'
   necessita_1on1:        boolean
   motivo_1on1:           string | null
+  alerta_estagnacao:     boolean
+  motivo_estagnacao:     string | null
+  sinal_evolucao:        boolean
+  evidencia_evolucao:    string | null
+}
+
+export type ActionStatus = 'open' | 'done' | 'cancelled'
+
+export interface Action {
+  id:             string
+  personSlug:     string
+  texto:          string
+  status:         ActionStatus
+  criadoEm:       string
+  prazo?:         string
+  concluidoEm?:   string
+  fonteArtefato?: string
 }
 
 export interface PerfilData {
