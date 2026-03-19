@@ -2,10 +2,11 @@ import { createContext, useContext, useState, type ReactNode } from 'react'
 
 export type ViewName =
   | 'dashboard'
+  | 'pares'
+  | 'gestores'
   | 'person'
   | 'person-form'
   | 'inbox'
-  | 'cycle-report'
   | 'settings'
 
 interface RouterEntry {

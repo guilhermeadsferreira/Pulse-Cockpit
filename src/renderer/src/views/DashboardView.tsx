@@ -10,20 +10,58 @@ function fmtDate(iso: string | null | undefined): string {
   return `${d}/${m}/${y}`
 }
 
-export function DashboardView() {
+const RELACAO_META: Record<string, { eyebrow: string; title: string; detectedLabel: string }> = {
+  liderado: {
+    eyebrow: 'Visão geral',
+    title: 'Seu time',
+    detectedLabel: 'pessoas mencionadas nos artefatos, mas ainda não no time',
+  },
+  par: {
+    eyebrow: 'Pares',
+    title: 'Seus pares',
+    detectedLabel: 'pessoas mencionadas nos artefatos, mas ainda não nos pares',
+  },
+  gestor: {
+    eyebrow: 'Gestores',
+    title: 'Seus gestores',
+    detectedLabel: 'pessoas mencionadas nos artefatos, mas ainda não nos gestores',
+  },
+}
+
+export function DashboardView({ relacao = 'liderado' }: { relacao?: string }) {
   const { navigate } = useRouter()
   const [people,   setPeople]   = useState<PersonConfig[]>([])
   const [perfis,   setPerfis]   = useState<Record<string, Partial<PerfilFrontmatter>>>({})
   const [detected, setDetected] = useState<DetectedPerson[]>([])
   const [loading,  setLoading]  = useState(true)
 
+  const meta = RELACAO_META[relacao] ?? RELACAO_META['liderado']
+
   const load = useCallback(async () => {
     setLoading(true)
-    const [list, det] = await Promise.all([
-      window.api.people.list(),
-      window.api.detected.list(),
-    ])
-    setPeople(list)
+
+    // Retry with exponential backoff on initial load failures
+    const delays = [0, 300, 800, 1500]
+    let list: PersonConfig[] = []
+    let det: DetectedPerson[] = []
+    for (let i = 0; i < delays.length; i++) {
+      if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]))
+      try {
+        ;[list, det] = await Promise.all([
+          window.api.people.list(),
+          window.api.detected.list(),
+        ])
+        break
+      } catch {
+        if (i === delays.length - 1) {
+          setLoading(false)
+          return
+        }
+      }
+    }
+
+    const filtered = list.filter((p) => p.relacao === relacao)
+    setPeople(filtered)
     // Filter out any detected people who are now registered
     const registeredSlugs = new Set(list.map((p) => p.slug))
     setDetected(det.filter((d) => !registeredSlugs.has(d.slug)))
@@ -31,13 +69,13 @@ export function DashboardView() {
 
     // Load perfil frontmatter for each person in parallel
     const results = await Promise.all(
-      list.map(async (p) => {
+      filtered.map(async (p) => {
         const perfil = await window.api.people.getPerfil(p.slug)
         return [p.slug, perfil?.frontmatter ?? {}] as const
       })
     )
     setPerfis(Object.fromEntries(results))
-  }, [])
+  }, [relacao])
 
   async function handleDismissDetected(slug: string) {
     await window.api.detected.dismiss(slug)
@@ -48,7 +86,12 @@ export function DashboardView() {
     load()
     // Refresh after ingestion (new detected people may have been added)
     window.api.ingestion.onCompleted(() => load())
-    return () => window.api.ingestion.removeListeners()
+    // Refresh when workspace path changes
+    window.addEventListener('settings:saved', load)
+    return () => {
+      window.api.ingestion.removeListeners()
+      window.removeEventListener('settings:saved', load)
+    }
   }, [load])
 
   return (
@@ -60,14 +103,14 @@ export function DashboardView() {
         display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
       }}>
         <div>
-          <div style={styles.eyebrow}>Visão geral</div>
-          <h1 style={styles.pageTitle}>Seu time</h1>
+          <div style={styles.eyebrow}>{meta.eyebrow}</div>
+          <h1 style={styles.pageTitle}>{meta.title}</h1>
           <div style={styles.pageSub}>
             {loading ? '…' : `${people.length} ${people.length === 1 ? 'pessoa' : 'pessoas'}`}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
-          <button onClick={() => navigate('person-form')} style={styles.btnPrimary}>
+          <button onClick={() => navigate('person-form', { defaultRelacao: relacao })} style={styles.btnPrimary}>
             <UserPlus size={13} />
             Adicionar pessoa
           </button>
@@ -95,7 +138,7 @@ export function DashboardView() {
           <>
             {/* Registered team */}
             {people.length === 0 && detected.length === 0 ? (
-              <EmptyState onAdd={() => navigate('person-form')} />
+              <EmptyState onAdd={() => navigate('person-form', { defaultRelacao: relacao })} />
             ) : people.length > 0 ? (
               <div style={{
                 display: 'grid',
@@ -134,7 +177,7 @@ export function DashboardView() {
                     {detected.length}
                   </span>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>
-                    — pessoas mencionadas nos artefatos, mas ainda não no time
+                    — {meta.detectedLabel}
                   </div>
                 </div>
                 <div style={{
@@ -146,7 +189,7 @@ export function DashboardView() {
                       key={p.slug}
                       person={p}
                       isLast={i === detected.length - 1}
-                      onRegister={() => navigate('person-form', { prefillSlug: p.slug, prefillNome: p.nome })}
+                      onRegister={() => navigate('person-form', { prefillSlug: p.slug, prefillNome: p.nome, defaultRelacao: relacao })}
                       onDismiss={() => handleDismissDetected(p.slug)}
                     />
                   ))}
@@ -158,6 +201,14 @@ export function DashboardView() {
       </div>
     </div>
   )
+}
+
+function calc1on1Alert(perfil: Partial<PerfilFrontmatter>, frequenciaDias: number): { label: string; urgent: boolean } | null {
+  if (!perfil.ultimo_1on1) return null
+  const daysSince = Math.floor((Date.now() - new Date(perfil.ultimo_1on1).getTime()) / 86_400_000)
+  const daysLate  = daysSince - frequenciaDias
+  if (daysLate <= 0) return null
+  return { label: `há ${daysSince}d sem 1:1`, urgent: daysLate > frequenciaDias }
 }
 
 function PersonCard({
@@ -178,6 +229,11 @@ function PersonCard({
     amarelo:  'var(--yellow, #d4a843)',
     vermelho: 'var(--red)',
   }[perfil.saude ?? ''] ?? 'var(--surface-3)'
+
+  const alert1on1  = calc1on1Alert(perfil, person.frequencia_1on1_dias)
+  const alertColor = alert1on1?.urgent
+    ? { text: 'var(--red)', bg: 'rgba(184,64,64,0.1)', border: 'rgba(184,64,64,0.3)' }
+    : { text: 'var(--yellow, #d4a843)', bg: 'rgba(212,168,67,0.1)', border: 'rgba(212,168,67,0.3)' }
 
   return (
     <div
@@ -230,12 +286,24 @@ function PersonCard({
 
       {/* Stats row */}
       {perfil.total_artefatos != null && (
-        <div style={{ padding: '6px 18px 8px', display: 'flex', gap: 14 }}>
+        <div style={{ padding: '6px 18px 8px', display: 'flex', gap: 14, flexWrap: 'wrap' }}>
           <Stat label="artefatos" value={String(perfil.total_artefatos)} />
           {perfil.acoes_pendentes_count != null && perfil.acoes_pendentes_count > 0 && (
             <Stat label="ações" value={String(perfil.acoes_pendentes_count)} alert />
           )}
           {perfil.ultimo_1on1 && <Stat label="último 1:1" value={fmtDate(perfil.ultimo_1on1)} mono />}
+          {alert1on1 && (
+            <span style={{
+              fontSize: 10, fontWeight: 600,
+              padding: '2px 7px', borderRadius: 20,
+              background: alertColor.bg,
+              border: `1px solid ${alertColor.border}`,
+              color: alertColor.text,
+              alignSelf: 'center',
+            }}>
+              {alert1on1.label}
+            </span>
+          )}
         </div>
       )}
 

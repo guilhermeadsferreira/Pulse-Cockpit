@@ -26,7 +26,7 @@ const CARGOS_SUGERIDOS = [
   'Fullstack Sênior', 'Fullstack Pleno', 'Fullstack Junior',
   'Tech Lead', 'Staff Engineer', 'Principal Engineer',
   'Product Manager', 'Engineering Manager', 'Data Engineer',
-  'QA Engineer', 'DevOps Engineer', 'SRE',
+  'QA Engineer', 'DevOps Engineer', 'SRE', 'Business Partner Tech',
 ]
 
 const EMPTY: Partial<PersonConfig> = {
@@ -69,10 +69,13 @@ export function PersonFormView() {
         ...f,
         nome: params.prefillNome || f.nome || '',
         slug: params.prefillSlug || f.slug || '',
+        ...(params.defaultRelacao ? { relacao: params.defaultRelacao } : {}),
       }))
       setAutoSlug(false)
+    } else if (params.defaultRelacao) {
+      setForm((f) => ({ ...f, relacao: params.defaultRelacao }))
     }
-  }, [params.slug, params.prefillSlug, params.prefillNome])
+  }, [params.slug, params.prefillSlug, params.prefillNome, params.defaultRelacao])
 
   function handleNameChange(value: string) {
     setForm((f) => ({
@@ -188,17 +191,14 @@ export function PersonFormView() {
             </Field>
 
             <Field label="Cargo *">
-              <input
-                style={styles.input}
-                list="cargos-list"
+              <select
+                style={styles.select}
                 value={form.cargo ?? ''}
                 onChange={(e) => set('cargo', e.target.value)}
-                placeholder="Selecione ou digite…"
-                autoComplete="off"
-              />
-              <datalist id="cargos-list">
-                {CARGOS_SUGERIDOS.map((c) => <option key={c} value={c} />)}
-              </datalist>
+              >
+                <option value="">Selecione…</option>
+                {CARGOS_SUGERIDOS.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
             </Field>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

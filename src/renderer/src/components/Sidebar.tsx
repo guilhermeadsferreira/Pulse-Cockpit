@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Grid2X2, Inbox, FileText, Settings } from 'lucide-react'
+import { Grid2X2, Inbox, Settings, Users, UserCheck } from 'lucide-react'
 import { useRouter, type ViewName } from '../router'
 
 interface NavItem {
@@ -10,16 +10,10 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: 'inbox',        label: 'Inbox',              icon: <Inbox size={14} /> },
-  { id: 'dashboard',    label: 'Time',               icon: <Grid2X2 size={14} /> },
-]
-
-const NAV_REPORTS: NavItem[] = [
-  { id: 'cycle-report', label: 'Relatório de Ciclo', icon: <FileText size={14} /> },
-]
-
-const NAV_SYSTEM: NavItem[] = [
-  { id: 'settings',     label: 'Settings',           icon: <Settings size={14} /> },
+  { id: 'inbox',     label: 'Inbox',    icon: <Inbox size={14} /> },
+  { id: 'dashboard', label: 'Time',     icon: <Grid2X2 size={14} /> },
+  { id: 'pares',     label: 'Pares',    icon: <Users size={14} /> },
+  { id: 'gestores',  label: 'Gestores', icon: <UserCheck size={14} /> },
 ]
 
 function getInitials(name: string): string {
@@ -32,12 +26,12 @@ function getInitials(name: string): string {
 
 export function Sidebar() {
   const { view, navigate } = useRouter()
-  const [profile, setProfile] = useState<{ name: string; role: string }>({ name: '', role: '' })
+  const [profile, setProfile] = useState<{ name: string; role: string; company: string }>({ name: '', role: '', company: '' })
 
   useEffect(() => {
     function loadProfile() {
       window.api.settings.load().then((s) => {
-        setProfile({ name: s.managerName ?? '', role: s.managerRole ?? '' })
+        setProfile({ name: s.managerName ?? '', role: s.managerRole ?? '', company: s.managerCompany ?? '' })
       })
     }
     loadProfile()
@@ -79,7 +73,7 @@ export function Sidebar() {
           letterSpacing: '-0.02em',
           lineHeight: 1,
         }}>
-          MgrCockpit
+          Pulse Cockpit
         </span>
         <span style={{
           width: 5, height: 5,
@@ -103,25 +97,14 @@ export function Sidebar() {
         {NAV_ITEMS.map((item) => (
           <NavBtn key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
         ))}
-
-        <SectionLabel>Relatórios</SectionLabel>
-        {NAV_REPORTS.map((item) => (
-          <NavBtn key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
-        ))}
-
-        <SectionLabel>Sistema</SectionLabel>
-        {NAV_SYSTEM.map((item) => (
-          <NavBtn key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
-        ))}
       </div>
 
-      {/* Footer */}
+      {/* Footer — gestor + gear */}
       <div style={{ padding: '8px', borderTop: '1px solid var(--border-subtle)' }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 9,
-          padding: '8px 10px',
+          padding: '6px 10px',
           borderRadius: 'var(--r)',
-          cursor: 'default',
         }}>
           <div style={{
             width: 30, height: 30,
@@ -136,19 +119,43 @@ export function Sidebar() {
           }}>
             {initials}
           </div>
-          <div>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{
               fontSize: 12.5, fontWeight: 600, lineHeight: 1.3,
               color: profile.name ? 'var(--text-primary)' : 'var(--text-muted)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {displayName}
             </div>
-            {profile.role && (
-              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>
-                {profile.role}
+            {(profile.role || profile.company) && (
+              <div style={{
+                fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {[profile.role, profile.company].filter(Boolean).join(' · ')}
               </div>
             )}
           </div>
+          <button
+            onClick={() => navigate('settings')}
+            title="Settings"
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 28, height: 28, borderRadius: 6,
+              background: view === 'settings' ? 'var(--surface-3)' : 'transparent',
+              border: 'none', cursor: 'pointer', flexShrink: 0,
+              color: view === 'settings' ? 'var(--accent)' : 'var(--text-muted)',
+              transition: 'background 0.12s, color 0.12s',
+            }}
+            onMouseEnter={(e) => {
+              if (view !== 'settings') e.currentTarget.style.color = 'var(--text-primary)'
+            }}
+            onMouseLeave={(e) => {
+              if (view !== 'settings') e.currentTarget.style.color = 'var(--text-muted)'
+            }}
+          >
+            <Settings size={14} />
+          </button>
         </div>
       </div>
     </nav>
@@ -212,15 +219,3 @@ function NavBtn({ item, active, onClick }: { item: NavItem; active: boolean; onC
   )
 }
 
-function SectionLabel({ children }: { children: string }) {
-  return (
-    <div style={{
-      fontSize: 9.5, fontWeight: 600,
-      letterSpacing: '0.12em', textTransform: 'uppercase',
-      color: 'var(--text-muted)',
-      padding: '12px 12px 4px',
-    }}>
-      {children}
-    </div>
-  )
-}
