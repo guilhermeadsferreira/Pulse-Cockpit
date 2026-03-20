@@ -81,7 +81,7 @@ IPC Bridge (preload/index.ts)
 ## Estrutura de Arquivos do Projeto
 
 ```
-mgr-cockpit/
+pulse-cockpit/
 ├── package.json
 ├── electron.vite.config.ts
 ├── tsconfig.json / tsconfig.node.json / tsconfig.web.json

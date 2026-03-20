@@ -6,10 +6,10 @@
 
 A documentação de produto deste projeto vive no PM Agent:
 
-**Caminho:** `/Users/guilhermeaugusto/Documents/workspace-projects/pm-agent/projects/mgr-cockpit/`
+**Caminho:** `/Users/guilhermeaugusto/Documents/workspace-projects/pm-agent/projects/pulse-cockpit/`
 
 ```
-pm-agent/projects/mgr-cockpit/
+pm-agent/projects/pulse-cockpit/
 ├── README.md          ← visão PM: o que é, status, decisões-chave
 ├── PRD.md             ← requisitos de produto (documento vivo)
 ├── decisions/         ← PDRs (Product Decision Records)
@@ -44,7 +44,7 @@ Estas tasks são independentes do pm-agent — rastreiam issues técnicas (bugs,
 
 A documentação de produto vive **no PM Agent**, não neste repo.
 
-**Caminho para docs de produto:** `/Users/guilhermeaugusto/Documents/workspace-projects/pm-agent/projects/mgr-cockpit/docs/`
+**Caminho para docs de produto:** `/Users/guilhermeaugusto/Documents/workspace-projects/pm-agent/projects/pulse-cockpit/docs/`
 
 | Situação | Documento a atualizar |
 |----------|----------------------|
@@ -80,7 +80,7 @@ O usuário deve ter o Claude Code CLI instalado e autenticado localmente. O path
 
 ## PRD
 
-- **PRD de produto:** `/Users/guilhermeaugusto/Documents/workspace-projects/pm-agent/projects/mgr-cockpit/PRD.md`
+- **PRD de produto:** `/Users/guilhermeaugusto/Documents/workspace-projects/pm-agent/projects/pulse-cockpit/PRD.md`
 - **PRD técnico:** `PRD_TECH.md` (na raiz deste repo)
 
 ---
