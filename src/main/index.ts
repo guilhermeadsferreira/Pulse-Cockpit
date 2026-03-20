@@ -1,18 +1,23 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import { join } from 'path'
-import { writeFileSync, readFileSync } from 'fs'
+import { writeFileSync, readFileSync, mkdirSync } from 'fs'
 import { SettingsManager } from './registry/SettingsManager'
 import { PersonRegistry } from './registry/PersonRegistry'
 import { DetectedRegistry } from './registry/DetectedRegistry'
 import { ActionRegistry } from './registry/ActionRegistry'
+import { DemandaRegistry } from './registry/DemandaRegistry'
+import { CicloRegistry } from './registry/CicloRegistry'
 import { setupWorkspace } from './workspace/WorkspaceSetup'
 import { runClaudePrompt } from './ingestion/ClaudeRunner'
+import { readFile } from './ingestion/FileReader'
 import { FileWatcher } from './ingestion/FileWatcher'
 import { buildAgendaPrompt, renderAgendaMarkdown, type AgendaAIResult } from './prompts/agenda.prompt'
 import { buildGestorAgendaPrompt, renderGestorAgendaMarkdown, type AgendaGestorAIResult } from './prompts/agenda-gestor.prompt'
 import { buildCyclePrompt, renderCycleMarkdown, type CycleAIResult } from './prompts/cycle.prompt'
-import type { CycleReportParams } from '../renderer/src/types/ipc'
+import { buildGestorCicloPrompt, renderGestorCicloMarkdown, type GestorCicloAIResult } from './prompts/gestor-ciclo.prompt'
+import { buildAutoavaliacaoPrompt, renderAutoavaliacaoMarkdown, type AutoavaliacaoAIResult } from './prompts/autoavaliacao.prompt'
+import type { CycleReportParams, AutoavaliacaoParams, DemandaStatus } from '../renderer/src/types/ipc'
 
 let mainWindow: BrowserWindow | null = null
 let fileWatcher:  FileWatcher  | null = null
@@ -276,6 +281,136 @@ function registerIpcHandlers(): void {
   ipcMain.handle('actions:update-status', (_event, slug: string, id: string, status: string) => {
     const { workspacePath } = SettingsManager.load()
     new ActionRegistry(workspacePath).updateStatus(slug, id, status as 'open' | 'done' | 'cancelled')
+  })
+
+  // ── Demandas (Módulo Eu) ──────────────────────────────────
+  ipcMain.handle('demandas:list', () => {
+    const { workspacePath } = SettingsManager.load()
+    return new DemandaRegistry(workspacePath).list()
+  })
+
+  ipcMain.handle('demandas:save', (_event, demanda) => {
+    const { workspacePath } = SettingsManager.load()
+    new DemandaRegistry(workspacePath).save(demanda)
+  })
+
+  ipcMain.handle('demandas:delete', (_event, id: string) => {
+    const { workspacePath } = SettingsManager.load()
+    new DemandaRegistry(workspacePath).delete(id)
+  })
+
+  ipcMain.handle('demandas:update-status', (_event, id: string, status: DemandaStatus, addToCiclo: boolean) => {
+    const { workspacePath } = SettingsManager.load()
+    const updated = new DemandaRegistry(workspacePath).updateStatus(id, status)
+    if (addToCiclo && updated && status === 'done') {
+      new CicloRegistry(workspacePath).addManualEntry(
+        `[Demanda concluída] ${updated.descricao} (origem: ${updated.origem})`
+      )
+    }
+    return updated
+  })
+
+  // ── Ciclo (Módulo Eu) ─────────────────────────────────────
+  ipcMain.handle('ciclo:list', () => {
+    const { workspacePath } = SettingsManager.load()
+    return new CicloRegistry(workspacePath).listEntries()
+  })
+
+  ipcMain.handle('ciclo:add-manual', (_event, texto: string) => {
+    const { workspacePath } = SettingsManager.load()
+    return new CicloRegistry(workspacePath).addManualEntry(texto)
+  })
+
+  ipcMain.handle('ciclo:delete', (_event, id: string) => {
+    const { workspacePath } = SettingsManager.load()
+    new CicloRegistry(workspacePath).deleteEntry(id)
+  })
+
+  ipcMain.handle('ciclo:ingest-artifact', async (_event, filePath: string) => {
+    const settings = SettingsManager.load()
+    if (!settings.claudeBinPath) {
+      return { success: false, error: 'Claude CLI não configurado. Configure o caminho em Settings.' }
+    }
+    try {
+      const { text } = await readFile(filePath)
+      const today = new Date().toISOString().slice(0, 10)
+      const prompt = buildGestorCicloPrompt({
+        managerName:     settings.managerName ?? 'Gestor',
+        managerRole:     settings.managerRole ?? '',
+        artifactContent: text,
+        today,
+      })
+      const result = await runClaudePrompt(settings.claudeBinPath, prompt, 90_000)
+      if (!result.success || !result.data) {
+        return { success: false, error: result.error || 'Falha na ingestão do artefato.' }
+      }
+      const aiResult = result.data as GestorCicloAIResult
+      const markdown = renderGestorCicloMarkdown(settings.managerName ?? 'Gestor', aiResult, text)
+      const titleSlug = aiResult.titulo
+        .toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '')
+        .replace(/\s+/g, '-')
+        .slice(0, 40)
+      const fileName = `${aiResult.data_artefato}-${titleSlug}.md`
+      const cicloReg = new CicloRegistry(settings.workspacePath)
+      const savedPath = cicloReg.writeArtifact(fileName, markdown)
+      const entry = {
+        id:       `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        tipo:     'artifact' as const,
+        texto:    aiResult.resumo,
+        titulo:   aiResult.titulo,
+        criadoEm: aiResult.data_artefato,
+        filePath: savedPath,
+      }
+      cicloReg.addArtifactEntryToLog(entry)
+      return { success: true, entry }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
+  })
+
+  ipcMain.handle('ciclo:autoavaliacao', async (_event, params: AutoavaliacaoParams) => {
+    const { periodoInicio, periodoFim } = params
+    const settings = SettingsManager.load()
+    if (!settings.claudeBinPath) {
+      return { success: false, error: 'Claude CLI não configurado. Configure o caminho em Settings.' }
+    }
+    try {
+      const cicloReg = new CicloRegistry(settings.workspacePath)
+      const artifacts = cicloReg.listArtifactsWithContent(periodoInicio, periodoFim)
+      const allEntries = cicloReg.listEntries()
+      const manualEntries = allEntries
+        .filter((e) => e.tipo === 'manual' && e.criadoEm >= periodoInicio && e.criadoEm <= periodoFim)
+        .map((e) => e.texto)
+      const prompt = buildAutoavaliacaoPrompt({
+        managerName:   settings.managerName ?? 'Gestor',
+        managerRole:   settings.managerRole ?? '',
+        artifacts,
+        manualEntries,
+        periodoInicio,
+        periodoFim,
+      })
+      const result = await runClaudePrompt(settings.claudeBinPath, prompt, 120_000)
+      if (!result.success || !result.data) {
+        return { success: false, error: result.error || 'Falha ao gerar autoavaliação.' }
+      }
+      const aiResult = result.data as AutoavaliacaoAIResult
+      const today = new Date().toISOString().slice(0, 10)
+      const markdown = renderAutoavaliacaoMarkdown(
+        settings.managerName ?? 'Gestor',
+        periodoInicio,
+        periodoFim,
+        aiResult,
+      )
+      const exportsDir = join(settings.workspacePath, 'exports')
+      mkdirSync(exportsDir, { recursive: true })
+      const fileName = `${today}-autoavaliacao.md`
+      const filePath = join(exportsDir, fileName)
+      writeFileSync(filePath, markdown, 'utf-8')
+      return { success: true, path: filePath, markdown, result: aiResult }
+    } catch (err) {
+      return { success: false, error: String(err) }
+    }
   })
 
   // ── Shell ─────────────────────────────────────────────────

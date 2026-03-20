@@ -8,6 +8,7 @@ import { validateIngestionResult } from './SchemaValidator'
 import { PersonRegistry } from '../registry/PersonRegistry'
 import { ActionRegistry } from '../registry/ActionRegistry'
 import { DetectedRegistry } from '../registry/DetectedRegistry'
+import { CicloRegistry } from '../registry/CicloRegistry'
 import { SettingsManager } from '../registry/SettingsManager'
 import { existsSync, readFileSync, mkdirSync, renameSync } from 'fs'
 import { join as pathJoin, dirname, normalize } from 'path'
@@ -131,6 +132,13 @@ export class IngestionPipeline {
       }
     }
 
+    // Auto-populate Meu Ciclo para reuniões coletivas
+    try {
+      new CicloRegistry(this.workspacePath).addFromIngestion(item.cachedAiResult, null)
+    } catch (err) {
+      console.warn('[IngestionPipeline] ciclo auto-populate (coletivo) falhou (não crítico):', err)
+    }
+
     item.status     = 'done'
     item.personSlug = collectiveSlug
     item.finishedAt = Date.now()
@@ -159,6 +167,15 @@ export class IngestionPipeline {
       writer.updatePerfil(slug, item.cachedAiResult, artifactFileName)
     } finally {
       release()
+    }
+
+    // Auto-populate Meu Ciclo: registra contribuição do gestor sem chamada extra ao Claude
+    try {
+      const registry = new PersonRegistry(this.workspacePath)
+      const pessoa = registry.get(slug)
+      new CicloRegistry(this.workspacePath).addFromIngestion(item.cachedAiResult, pessoa?.nome ?? null)
+    } catch (err) {
+      console.warn('[IngestionPipeline] ciclo auto-populate falhou (não crítico):', err)
     }
 
     item.status         = 'done'

@@ -242,8 +242,6 @@ function PersonCard({
   onViewCockpit: () => void
   onEdit: () => void
 }) {
-  const [hovered, setHovered] = useState(false)
-
   const healthColor = {
     verde:    'var(--green)',
     amarelo:  'var(--yellow, #d4a843)',
@@ -262,18 +260,12 @@ function PersonCard({
 
   return (
     <div
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       style={{
-        background: hovered ? 'var(--surface-2)' : 'var(--surface)',
+        background: 'var(--surface)',
         border: '1px solid var(--border)',
         borderRadius: 'var(--r)',
         overflow: 'hidden',
         position: 'relative',
-        transition: 'all 0.18s ease',
-        transform: hovered ? 'translateY(-2px)' : 'none',
-        boxShadow: hovered ? '0 8px 28px rgba(0,0,0,0.4)' : 'none',
-        cursor: 'default',
       }}
     >
       {/* Left border — health indicator */}
@@ -422,12 +414,12 @@ function PersonCard({
       <div style={{ height: 1, background: 'var(--border-subtle)', margin: '0 14px 0 18px' }} />
 
       {/* Actions */}
-      <div style={{ padding: '9px 14px 11px 18px', display: 'flex', gap: 6 }}>
-        <button onClick={onViewCockpit} style={{ ...styles.btnGhost, flex: 1 }}>
+      <div style={{ padding: '9px 8px 11px 10px', display: 'flex', gap: 6 }}>
+        <button onClick={onViewCockpit} style={styles.btnGhost}>
           <ChevronRight size={12} />
           Ver cockpit
         </button>
-        <button onClick={onEdit} style={{ ...styles.btnSecondary, flex: 1 }}>
+        <button onClick={onEdit} style={{ ...styles.btnSecondary, marginLeft: 'auto' }}>
           <Pencil size={12} />
           Editar
         </button>
@@ -697,6 +689,6 @@ const styles = {
     background: 'transparent', color: 'var(--text-secondary)',
     border: '1px solid transparent',
     fontSize: 12, fontFamily: 'var(--font)', fontWeight: 500,
-    cursor: 'pointer', justifyContent: 'center' as const,
+    cursor: 'pointer', justifyContent: 'flex-start' as const,
   } as React.CSSProperties,
 }

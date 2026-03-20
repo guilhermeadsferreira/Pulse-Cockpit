@@ -190,3 +190,53 @@ export interface CycleReportResult {
   }
   error?: string
 }
+
+// ── Módulo Eu ─────────────────────────────────────────────────
+
+export type DemandaStatus = 'open' | 'done'
+export type DemandaOrigem = 'Líder' | 'Liderado' | 'Par' | 'Eu'
+
+export interface Demanda {
+  id:              string
+  descricao:       string
+  origem:          DemandaOrigem
+  prazo?:          string | null  // YYYY-MM-DD
+  criadoEm:        string         // YYYY-MM-DD
+  atualizadoEm:    string         // YYYY-MM-DD
+  status:          DemandaStatus
+  concluidoEm?:    string | null
+}
+
+export type CicloEntryTipo = 'manual' | 'artifact'
+
+export interface CicloEntry {
+  id:        string
+  tipo:      CicloEntryTipo
+  texto:     string              // manual text or AI resumo
+  criadoEm:  string             // YYYY-MM-DD
+  titulo?:   string             // for artifact entries
+  filePath?: string             // absolute path to .md file
+}
+
+export interface AutoavaliacaoParams {
+  periodoInicio: string          // YYYY-MM-DD
+  periodoFim:    string          // YYYY-MM-DD
+}
+
+export interface AutoavaliacaoResult {
+  success:   boolean
+  path?:     string
+  markdown?: string
+  result?: {
+    o_que_fiz_e_entreguei:    string[]
+    como_demonstrei_valores:  string[]
+    como_me_vejo_no_futuro:   string
+  }
+  error?: string
+}
+
+export interface CicloIngestResult {
+  success:  boolean
+  entry?:   CicloEntry
+  error?:   string
+}

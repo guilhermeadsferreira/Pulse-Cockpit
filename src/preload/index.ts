@@ -43,6 +43,18 @@ contextBridge.exposeInMainWorld('api', {
     updateStatus: (slug: string, id: string, status: string) => ipcRenderer.invoke('actions:update-status', slug, id, status),
   },
 
+  eu: {
+    listDemandas:        ()                                                          => ipcRenderer.invoke('demandas:list'),
+    saveDemanda:         (data: unknown)                                             => ipcRenderer.invoke('demandas:save', data),
+    deleteDemanda:       (id: string)                                                => ipcRenderer.invoke('demandas:delete', id),
+    updateDemandaStatus: (id: string, status: string, addToCiclo: boolean)          => ipcRenderer.invoke('demandas:update-status', id, status, addToCiclo),
+    listCiclo:           ()                                                          => ipcRenderer.invoke('ciclo:list'),
+    addManualEntry:      (texto: string)                                             => ipcRenderer.invoke('ciclo:add-manual', texto),
+    deleteCicloEntry:    (id: string)                                                => ipcRenderer.invoke('ciclo:delete', id),
+    ingestArtifact:      (filePath: string)                                          => ipcRenderer.invoke('ciclo:ingest-artifact', filePath),
+    gerarAutoavaliacao:  (params: unknown)                                           => ipcRenderer.invoke('ciclo:autoavaliacao', params),
+  },
+
   shell: {
     open: (filePath: string) => ipcRenderer.invoke('shell:open', filePath),
   },

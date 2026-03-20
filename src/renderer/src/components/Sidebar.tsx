@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
-import { Grid2X2, Inbox, Settings, Users, UserCheck, ScrollText } from 'lucide-react'
+import { Grid2X2, Inbox, Settings, Users, UserCheck, ScrollText, User } from 'lucide-react'
 import { useRouter, type ViewName } from '../router'
+import type { Demanda } from '../types/ipc'
 
 interface NavItem {
   id: ViewName
@@ -8,14 +9,6 @@ interface NavItem {
   icon: React.ReactNode
   badge?: number
 }
-
-const NAV_ITEMS: NavItem[] = [
-  { id: 'inbox',     label: 'Inbox',    icon: <Inbox size={14} /> },
-  { id: 'dashboard', label: 'Time',     icon: <Grid2X2 size={14} /> },
-  { id: 'pares',     label: 'Pares',    icon: <Users size={14} /> },
-  { id: 'gestores',  label: 'Gestores', icon: <UserCheck size={14} /> },
-  { id: 'feed',      label: 'Reuniões', icon: <ScrollText size={14} /> },
-]
 
 function getInitials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean)
@@ -27,7 +20,8 @@ function getInitials(name: string): string {
 
 export function Sidebar() {
   const { view, navigate } = useRouter()
-  const [profile, setProfile] = useState<{ name: string; role: string }>({ name: '', role: '' })
+  const [profile, setProfile]               = useState<{ name: string; role: string }>({ name: '', role: '' })
+  const [openDemandasCount, setOpenDemandas] = useState(0)
 
   useEffect(() => {
     function loadProfile() {
@@ -39,6 +33,27 @@ export function Sidebar() {
     window.addEventListener('settings:saved', loadProfile)
     return () => window.removeEventListener('settings:saved', loadProfile)
   }, [])
+
+  useEffect(() => {
+    async function loadDemandas() {
+      try {
+        const list = await window.api.eu.listDemandas() as Demanda[]
+        setOpenDemandas(list.filter((d) => d.status === 'open').length)
+      } catch { /* workspace may not be ready yet */ }
+    }
+    loadDemandas()
+    window.addEventListener('demandas:changed', loadDemandas)
+    return () => window.removeEventListener('demandas:changed', loadDemandas)
+  }, [])
+
+  const navItems: NavItem[] = [
+    { id: 'inbox',     label: 'Inbox',    icon: <Inbox size={14} /> },
+    { id: 'dashboard', label: 'Time',     icon: <Grid2X2 size={14} /> },
+    { id: 'pares',     label: 'Pares',    icon: <Users size={14} /> },
+    { id: 'gestores',  label: 'Gestores', icon: <UserCheck size={14} /> },
+    { id: 'feed',      label: 'Reuniões', icon: <ScrollText size={14} /> },
+    { id: 'eu',        label: 'Eu',       icon: <User size={14} />, badge: openDemandasCount > 0 ? openDemandasCount : undefined },
+  ]
 
   const displayName = profile.name || 'Configurar perfil'
   const initials = getInitials(profile.name)
@@ -95,7 +110,7 @@ export function Sidebar() {
         gap: 1,
         overflowY: 'auto',
       }}>
-        {NAV_ITEMS.map((item) => (
+        {navItems.map((item) => (
           <NavBtn key={item.id} item={item} active={view === item.id} onClick={() => navigate(item.id)} />
         ))}
       </div>
@@ -174,7 +189,6 @@ function NavBtn({ item, active, onClick }: { item: NavItem; active: boolean; onC
         background: active ? 'var(--surface-3)' : 'transparent',
         border: 'none',
         outline: 'none',
-        boxShadow: active ? 'inset 2px 0 0 var(--accent)' : 'inset 2px 0 0 transparent',
         color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
         fontSize: 13, fontWeight: active ? 500 : 400,
         cursor: 'pointer',

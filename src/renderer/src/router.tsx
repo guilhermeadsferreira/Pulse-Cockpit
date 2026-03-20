@@ -9,6 +9,7 @@ export type ViewName =
   | 'person-form'
   | 'inbox'
   | 'settings'
+  | 'eu'
 
 interface RouterEntry {
   view: ViewName
