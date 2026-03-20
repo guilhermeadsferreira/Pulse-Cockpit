@@ -250,8 +250,9 @@ function PersonCard({
     vermelho: 'var(--red)',
   }[perfil.saude ?? ''] ?? 'var(--surface-3)'
 
+  const today = new Date().toISOString().slice(0, 10)
   const overdueActions = actions.filter(
-    (a) => a.status === 'open' && daysSince(a.criadoEm) > 14
+    (a) => a.status === 'open' && a.prazo != null && a.prazo < today
   )
 
   const alert1on1  = calc1on1Alert(perfil, person.frequencia_1on1_dias)
@@ -328,7 +329,7 @@ function PersonCard({
               {alert1on1.label}
             </span>
           )}
-          {perfil.necessita_1on1 && (
+          {perfil.necessita_1on1 && !perfil.dados_stale && (
             <span
               title={perfil.motivo_1on1 ?? '1:1 necessário'}
               style={{

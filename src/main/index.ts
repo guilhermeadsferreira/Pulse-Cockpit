@@ -92,9 +92,9 @@ function registerIpcHandlers(): void {
     getRegistry().save(config)
     // If this is a newly registered person, sync any pending inbox items
     if (isNew && fileWatcher) {
-      fileWatcher.reprocessPending(config.slug).then((count) => {
-        if (count > 0) console.log(`[people:save] synced ${count} pending item(s) for "${config.slug}"`)
-      })
+      const count = await fileWatcher.reprocessPending(config.slug)
+      if (count > 0) console.log(`[people:save] synced ${count} pending item(s) for "${config.slug}"`)
+
     }
   })
 
