@@ -267,7 +267,7 @@ export class IngestionPipeline {
       const principalPass1 = aiResult.pessoa_principal
       if (principalPass1 && registry.get(principalPass1)) {
         const perfil = registry.getPerfil(principalPass1)
-        if (perfil) {
+        if (perfil && shouldRunPass2(perfil.frontmatter, text.length, principalPass1)) {
           console.log(`[IngestionPipeline] pass 2 com perfil de "${principalPass1}"`)
           const promptPass2 = buildIngestionPrompt({
             teamRegistry,
@@ -381,4 +381,24 @@ export class IngestionPipeline {
       if (!win.isDestroyed()) win.webContents.send(channel, payload)
     }
   }
+}
+
+/**
+ * Determines whether a second Claude pass is worth running.
+ * Avoids spending 60-90s on Pass 2 when the artifact is too short
+ * or the profile doesn't have enough history to benefit from context integration.
+ *
+ * Rules:
+ *  - Skip for _coletivo (no evolving profile)
+ *  - Skip if this is one of the first 2 artifacts (not enough history to integrate)
+ *  - Skip if the artifact content is under 300 chars (e.g. a short daily note)
+ */
+function shouldRunPass2(
+  frontmatter: Record<string, unknown>,
+  artefatoSize: number,
+  slug: string,
+): boolean {
+  if (slug === '_coletivo') return false
+  const totalArtefatos = typeof frontmatter.total_artefatos === 'number' ? frontmatter.total_artefatos : 0
+  return totalArtefatos >= 2 && artefatoSize > 300
 }

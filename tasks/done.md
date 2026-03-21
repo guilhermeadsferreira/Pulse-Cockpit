@@ -1,6 +1,14 @@
 # Done — Pulse Cockpit
 
-> Última atualização: 2026-03-19
+> Última atualização: 2026-03-21
+
+## Fase 4 — Bugs críticos de ingestão ✓ (2026-03-21)
+
+- **T6.1** SchemaValidator rejeita `null` como campo ausente — reuniões coletivas falhavam sempre com "campo ausente: pessoa_principal"; corrigido com `NULLABLE_FIELDS`; adicionado `sentimento_detectado` e `nivel_engajamento` aos campos obrigatórios
+- **T6.2** ArtifactWriter `replaceBlock` com chave inválida — `'resumo_evolutivo'` não existe em `SECTION`, causava TypeError em toda ingestão 2+; corrigido para `'resumo'`
+- **T6.3** ArtifactWriter `appendToBlock` inseria no bloco errado — close marker compartilhado entre todos os blocos fazia `String.replace()` sempre inserir no primeiro (`resumo`); corrigido com open+close anchoring; `conquistas` ganhou open marker único; `ProfileMigration` v3 migra perfis existentes
+- **T6.4** ClaudeRunner backoff linear → exponencial com jitter (cap 30s); log de retry por tentativa
+- **T6.5** IngestionPipeline `shouldRunPass2` — heurística que evita Pass 2 para artefatos curtos (≤300 chars) ou perfis com menos de 2 artefatos
 
 ## Fase 1 — Bloqueadores ✓
 

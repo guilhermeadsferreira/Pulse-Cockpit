@@ -32,8 +32,11 @@ async function attemptRun(
   if (result.success) return result
 
   if (attempt < maxRetries) {
-    // Linear backoff: wait attempt * 2s before retrying
-    await new Promise((r) => setTimeout(r, (attempt + 1) * 2000))
+    // Exponential backoff with jitter: 2^attempt * 1s ± 50–100%, capped at 30s
+    const base = Math.pow(2, attempt) * 1000
+    const delay = Math.min(base * (0.5 + Math.random() * 0.5), 30_000)
+    console.log(`[ClaudeRunner] retry ${attempt + 1}/${maxRetries} em ${Math.round(delay)}ms`)
+    await new Promise((r) => setTimeout(r, delay))
     return attemptRun(claudeBin, prompt, timeoutMs, attempt + 1, maxRetries)
   }
 

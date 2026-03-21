@@ -2,14 +2,15 @@ import { existsSync, readFileSync, writeFileSync, renameSync, copyFileSync } fro
 import { join } from 'path'
 import type { IngestionAIResult } from '../prompts/ingestion.prompt'
 import { ActionRegistry } from '../registry/ActionRegistry'
+import { CURRENT_SCHEMA_VERSION } from '../migration/ProfileMigration'
 
 const SECTION = {
-  resumo:    { open: '<!-- BLOCO GERENCIADO PELA IA — reescrito a cada ingestão -->',     close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  acoes:     { open: '<!-- BLOCO GERENCIADO PELA IA — append de novos itens -->',          close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  atencao:   { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas -->',                  close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  conquistas:{ open: '<!-- BLOCO GERENCIADO PELA IA — append apenas -->',                  close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  resumo:    { open: '<!-- BLOCO GERENCIADO PELA IA — reescrito a cada ingestão -->',          close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  acoes:     { open: '<!-- BLOCO GERENCIADO PELA IA — append de novos itens -->',               close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  atencao:   { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas -->',                       close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  conquistas:{ open: '<!-- BLOCO GERENCIADO PELA IA — append apenas (conquistas) -->',          close: '<!-- FIM DO BLOCO GERENCIADO -->' },
   temas:     { open: '<!-- BLOCO GERENCIADO PELA IA — lista deduplicada, substituída a cada ingestão -->', close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  historico: { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas, nunca reescrito -->', close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  historico: { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas, nunca reescrito -->',     close: '<!-- FIM DO BLOCO GERENCIADO -->' },
 }
 
 /**
@@ -156,7 +157,7 @@ export class ArtifactWriter {
 
     return `---
 slug: "${slug}"
-schema_version: 2
+schema_version: ${CURRENT_SCHEMA_VERSION}
 ultima_atualizacao: "${now}"
 ultima_ingestao: "${today}"
 total_artefatos: 1
@@ -216,7 +217,7 @@ ${SECTION.historico.close}
     let updated = this.updateFrontmatter(existing, result, now)
 
     // 2. Replace Resumo Evolutivo (full replace)
-    updated = this.replaceBlock(updated, 'resumo_evolutivo', result.resumo_evolutivo)
+    updated = this.replaceBlock(updated, 'resumo', result.resumo_evolutivo)
 
     // 3. Append Ações Pendentes
     if (result.acoes_comprometidas.length > 0) {
@@ -329,11 +330,13 @@ ${SECTION.historico.close}
   }
 
   private appendToBlock(content: string, blockKey: keyof typeof SECTION, newLines: string): string {
-    const { close } = SECTION[blockKey]
+    const { open, close } = SECTION[blockKey]
+    const escapedOpen  = open.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const escapedClose = close.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const re = new RegExp(`(\n${escapedClose})`)
+    // Anchor to the specific block using its unique open marker, then find the first close after it
+    const re = new RegExp(`(${escapedOpen}\n[\\s\\S]*?)(\n${escapedClose})`)
     if (re.test(content)) {
-      return content.replace(re, `\n${newLines}$1`)
+      return content.replace(re, `$1\n${newLines}$2`)
     }
     return content
   }

@@ -18,7 +18,17 @@ const REQUIRED_FIELDS: (keyof IngestionAIResult)[] = [
   'necessita_1on1',
   'alerta_estagnacao',
   'sinal_evolucao',
+  'sentimento_detectado',
+  'nivel_engajamento',
 ]
+
+// Fields where null is an explicitly valid value (not treated as missing)
+const NULLABLE_FIELDS = new Set<keyof IngestionAIResult>([
+  'pessoa_principal',
+  'motivo_1on1',
+  'motivo_estagnacao',
+  'evidencia_evolucao',
+])
 
 export interface ValidationResult {
   valid: boolean
@@ -37,14 +47,18 @@ export function validateIngestionResult(data: unknown): ValidationResult {
   const obj = data as Record<string, unknown>
 
   for (const field of REQUIRED_FIELDS) {
-    if (obj[field] === undefined || obj[field] === null) {
-      missingFields.push(field)
-    }
+    const value = obj[field]
+    const isMissing = value === undefined || (value === null && !NULLABLE_FIELDS.has(field))
+    if (isMissing) missingFields.push(field)
   }
 
   // Type-specific checks
   if (obj.indicador_saude && !['verde', 'amarelo', 'vermelho'].includes(obj.indicador_saude as string)) {
     typeErrors.push(`indicador_saude inválido: "${obj.indicador_saude}"`)
+  }
+
+  if (obj.sentimento_detectado && !['positivo', 'neutro', 'ansioso', 'frustrado', 'desengajado'].includes(obj.sentimento_detectado as string)) {
+    typeErrors.push(`sentimento_detectado inválido: "${obj.sentimento_detectado}"`)
   }
 
   if (obj.tipo && !['1on1', 'reuniao', 'daily', 'planning', 'retro', 'feedback', 'outro'].includes(obj.tipo as string)) {
