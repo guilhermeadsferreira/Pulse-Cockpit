@@ -2,6 +2,22 @@
 
 ---
 
+## ⚠️ ATENÇÃO — App em produção com dados reais
+
+**Este app está em uso real.** O workspace do usuário (`~/Library/Mobile Documents/com~apple~CloudDocs/PulseCockpit/` ou o path configurado em `~/.pulsecockpit/settings.json`) contém perfis de liderados, histórico de artefatos e contexto acumulado ao longo do tempo — tudo sincronizado com iCloud Drive.
+
+**Regras absolutas ao trabalhar neste projeto:**
+
+- **NUNCA deletar, mover ou renomear arquivos/pastas do workspace** (`~/MgrCockpit/pessoas/`, `inbox/`, `artefatos/`, `gestor/`, etc.) — qualquer perda é irreversível mesmo com iCloud
+- **NUNCA executar operações de limpeza ou migração de dados** sem confirmação explícita do usuário
+- **Antes de qualquer mudança que afete a estrutura do workspace** (novos diretórios, renaming de campos no `config.yaml` ou `perfil.md`, mudanças de schema): descrever o impacto e aguardar aprovação
+- **Mudanças no `ArtifactWriter`, `PersonRegistry` ou qualquer classe que escreve em disco** devem ser revisadas com atenção redobrada — uma regressão pode corromper perfis existentes
+- **Migrações de schema** (como `ProfileMigration.ts`) devem sempre ser aditivas e não-destrutivas; nunca remover campos sem garantir que todos os arquivos existentes já foram migrados
+
+**Por que isso importa:** o contexto acumulado nos perfis (insights, histórico de 1:1s, alertas, evolução das pessoas) é o valor central do produto. Perder esses dados significa perder meses de trabalho do gestor.
+
+---
+
 ## PM Agent
 
 A documentação de produto deste projeto vive no PM Agent:

@@ -2,12 +2,13 @@ export interface AgendaPromptParams {
   configYaml:        string
   perfilMd:          string
   today:             string
+  dadosStale?:       boolean
   pautasAnteriores?: Array<{ date: string; content: string }>
   openActions?:      Array<{ texto: string; criadoEm: string }>
 }
 
 export function buildAgendaPrompt(params: AgendaPromptParams): string {
-  const { configYaml, perfilMd, today, pautasAnteriores = [], openActions = [] } = params
+  const { configYaml, perfilMd, today, dadosStale = false, pautasAnteriores = [], openActions = [] } = params
 
   const pautasSection = pautasAnteriores.length > 0
     ? `\n## Histórico de pautas anteriores\n${pautasAnteriores.map(p => `### Pauta de ${p.date}\n${p.content}`).join('\n\n')}\n`
@@ -21,9 +22,14 @@ export function buildAgendaPrompt(params: AgendaPromptParams): string {
       }).join('\n')}\n`
     : ''
 
+  const staleWarning = dadosStale
+    ? `\n⚠️ ATENÇÃO: O perfil desta pessoa não recebe novos artefatos há mais de 30 dias. Os dados podem estar desatualizados. Não gere alertas baseados em inferências do perfil — retorne "alertas" como array vazio e indique na seção "temas" que o gestor deve atualizar o contexto antes do 1:1.\n`
+    : ''
+
   return `Você é o assistente de um gestor de tecnologia. Gere uma pauta estruturada para o próximo 1:1.
 
 Data atual: ${today}
+${staleWarning}
 
 ## Configuração da pessoa
 \`\`\`yaml

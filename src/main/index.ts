@@ -223,7 +223,13 @@ function registerIpcHandlers(): void {
       markdown = renderGestorAgendaMarkdown(person.nome, today, agendaResult)
     } else {
       // Pauta com liderado, par ou stakeholder — fluxo original
-      const prompt = buildAgendaPrompt({ configYaml: configRaw, perfilMd: perfilData.raw, today, pautasAnteriores, openActions })
+      const ultimaIngestao = (perfilData.frontmatter.ultima_ingestao as string)
+        || (perfilData.frontmatter.ultima_atualizacao as string)?.slice(0, 10)
+        || null
+      const dadosStale = ultimaIngestao
+        ? (Date.now() - new Date(ultimaIngestao).getTime()) > 30 * 24 * 60 * 60 * 1000
+        : false
+      const prompt = buildAgendaPrompt({ configYaml: configRaw, perfilMd: perfilData.raw, today, dadosStale, pautasAnteriores, openActions })
       const result = await runClaudePrompt(settings.claudeBinPath, prompt, 90_000)
       if (!result.success || !result.data) {
         return { success: false, error: result.error || 'Falha ao gerar pauta.' }
@@ -254,7 +260,13 @@ function registerIpcHandlers(): void {
     }
 
     const artifacts = registry.listArtifactsWithContent(personSlug, periodoInicio, periodoFim)
-    const prompt = buildCyclePrompt({ configYaml: configRaw, perfilMd: perfilData.raw, artifacts, periodoInicio, periodoFim })
+    const { prompt, truncatedArtifacts, totalArtifacts } = buildCyclePrompt({
+      configYaml: configRaw, perfilMd: perfilData.raw, artifacts, periodoInicio, periodoFim,
+    })
+
+    if (truncatedArtifacts > 0) {
+      console.warn(`[ai:cycle-report] contexto limitado: ${totalArtifacts - truncatedArtifacts}/${totalArtifacts} artefatos incluídos para "${personSlug}"`)
+    }
 
     const result = await runClaudePrompt(settings.claudeBinPath, prompt, 120_000)
     if (!result.success || !result.data) {
@@ -269,7 +281,7 @@ function registerIpcHandlers(): void {
     const filePath = join(settings.workspacePath, 'exports', fileName)
     writeFileSync(filePath, markdown, 'utf-8')
 
-    return { success: true, path: filePath, markdown, result: cycleResult }
+    return { success: true, path: filePath, markdown, result: cycleResult, truncatedArtifacts }
   })
 
   // ── Actions ───────────────────────────────────────────────
@@ -461,6 +473,7 @@ app.whenReady().then(async () => {
   // Start FileWatcher after window is created
   fileWatcher = new FileWatcher(settings.workspacePath)
   fileWatcher.start()
+  fileWatcher.restorePending() // restore items pending from previous session
 
   setupAutoUpdater()
 

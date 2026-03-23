@@ -10,7 +10,8 @@ import { ActionRegistry } from '../registry/ActionRegistry'
 import { DetectedRegistry } from '../registry/DetectedRegistry'
 import { CicloRegistry } from '../registry/CicloRegistry'
 import { SettingsManager } from '../registry/SettingsManager'
-import { existsSync, readFileSync, mkdirSync, renameSync } from 'fs'
+import { existsSync, readFileSync, writeFileSync, mkdirSync, renameSync } from 'fs'
+import { ProfileCompressor } from './ProfileCompressor'
 import { join as pathJoin, dirname, normalize } from 'path'
 
 export type QueueItemStatus = 'queued' | 'processing' | 'done' | 'pending' | 'error'
@@ -35,6 +36,7 @@ export interface QueueItem {
 }
 
 const MAX_CONCURRENT = 3
+const MAX_QUEUE_SIZE  = 100
 
 export class IngestionPipeline {
   private queue: QueueItem[] = []
@@ -44,12 +46,64 @@ export class IngestionPipeline {
 
   constructor(private workspacePath: string) {}
 
+  private get pendingQueuePath(): string {
+    return pathJoin(this.workspacePath, 'inbox', 'pending-queue.json')
+  }
+
+  /**
+   * Persists all pending items (including cachedAiResult) to disk.
+   * Called whenever the pending set changes.
+   */
+  private savePendingQueue(): void {
+    const pending = this.queue.filter((i) => i.status === 'pending')
+    try {
+      writeFileSync(this.pendingQueuePath, JSON.stringify(pending, null, 2), 'utf-8')
+    } catch (err) {
+      console.error('[IngestionPipeline] failed to save pending queue:', err)
+    }
+  }
+
+  /**
+   * Restores pending items from disk on app startup.
+   * Items with no cached AI result are discarded (unrecoverable).
+   */
+  restorePending(): void {
+    if (!existsSync(this.pendingQueuePath)) return
+    try {
+      const raw   = readFileSync(this.pendingQueuePath, 'utf-8')
+      const items = JSON.parse(raw) as QueueItem[]
+      const valid = items.filter((i) => i.status === 'pending' && i.cachedAiResult && i.cachedText)
+      if (valid.length === 0) return
+      for (const item of valid) {
+        const alreadyInQueue = this.queue.some((q) => q.filePath === item.filePath && q.status === 'pending')
+        if (!alreadyInQueue) {
+          this.queue.unshift(item)
+          this.notifyRenderer('ingestion:started', { filePath: item.filePath, fileName: item.fileName })
+        }
+      }
+      console.log(`[IngestionPipeline] restored ${valid.length} pending item(s) from disk`)
+    } catch (err) {
+      console.error('[IngestionPipeline] failed to restore pending queue:', err)
+    }
+  }
+
   enqueue(filePath: string): void {
     const fileName = basename(filePath)
 
     // Deduplicate: don't add if already queued, processing, or pending
     const exists = this.queue.some((i) => i.filePath === filePath && (i.status === 'queued' || i.status === 'processing' || i.status === 'pending'))
     if (exists) return
+
+    // Backpressure: reject if active queue is at capacity
+    const activeCount = this.queue.filter((i) => i.status === 'queued' || i.status === 'processing' || i.status === 'pending').length
+    if (activeCount >= MAX_QUEUE_SIZE) {
+      console.warn(`[IngestionPipeline] queue full (${MAX_QUEUE_SIZE}), rejecting: ${fileName}`)
+      this.notifyRenderer('ingestion:failed', {
+        filePath,
+        error: `Fila cheia (máximo ${MAX_QUEUE_SIZE} itens). Aguarde o processamento atual terminar.`,
+      })
+      return
+    }
 
     const item: QueueItem = {
       id:       `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
@@ -161,12 +215,23 @@ export class IngestionPipeline {
 
     // Serialize per-person writes to prevent race conditions in parallel processing
     const release = await this.acquirePersonLock(slug)
+    let totalArtefatos = 0
     try {
       const writer = new ArtifactWriter(this.workspacePath)
       const artifactFileName = writer.writeArtifact(slug, item.cachedAiResult, item.cachedText)
-      writer.updatePerfil(slug, item.cachedAiResult, artifactFileName)
+      ;({ totalArtefatos } = writer.updatePerfil(slug, item.cachedAiResult, artifactFileName))
     } finally {
       release()
+    }
+
+    // Trigger profile compression every 10 artifacts (fire-and-forget, non-blocking)
+    if (totalArtefatos > 0 && totalArtefatos % 10 === 0) {
+      const settings = SettingsManager.load()
+      if (settings.claudeBinPath) {
+        new ProfileCompressor(this.workspacePath, settings.claudeBinPath)
+          .compress(slug, totalArtefatos)
+          .catch((err) => console.warn(`[IngestionPipeline] compressão falhou para "${slug}":`, err))
+      }
     }
 
     // Auto-populate Meu Ciclo: registra contribuição do gestor sem chamada extra ao Claude
@@ -184,6 +249,7 @@ export class IngestionPipeline {
     // Free cached data
     item.cachedAiResult = undefined
     item.cachedText     = undefined
+    this.savePendingQueue() // remove from persisted pending list
     this.moveToProcessados(item.filePath)
 
     this.notifyRenderer('ingestion:completed', {
@@ -275,7 +341,8 @@ export class IngestionPipeline {
             artifactContent: text,
             today,
           })
-          const resultPass2 = await runClaudePrompt(settings.claudeBinPath, promptPass2, 90_000)
+          // Pass 2 carries the full perfil.md in context — allow up to 3× the base timeout
+          const resultPass2 = await runClaudePrompt(settings.claudeBinPath, promptPass2, 180_000)
           if (resultPass2.success && resultPass2.data) {
             const validation2 = validateIngestionResult(resultPass2.data)
             if (validation2.valid) {
@@ -284,6 +351,10 @@ export class IngestionPipeline {
               const details = [...validation2.missingFields.map(f => `campo ausente: ${f}`), ...validation2.typeErrors].join('; ')
               console.warn(`[IngestionPipeline] schema inválido no pass 2, mantendo pass 1: ${details}`)
             }
+          } else {
+            console.warn(
+              `[IngestionPipeline] pass 2 falhou (${resultPass2.error ?? 'sem dados'}), usando resultado do pass 1 para "${principalPass1}"`
+            )
           }
         }
       }
@@ -334,6 +405,7 @@ export class IngestionPipeline {
       } else {
         // pessoa_principal identificada mas não cadastrada → pending
         item.status = 'pending'
+        this.savePendingQueue() // persist to disk so restart doesn't lose this item
         this.notifyRenderer('ingestion:completed', {
           filePath: item.filePath, personSlug: undefined,
           tipo: item.tipo, summary: item.summary, novas,
@@ -393,7 +465,7 @@ export class IngestionPipeline {
  *  - Skip if this is one of the first 2 artifacts (not enough history to integrate)
  *  - Skip if the artifact content is under 300 chars (e.g. a short daily note)
  */
-function shouldRunPass2(
+export function shouldRunPass2(
   frontmatter: Record<string, unknown>,
   artefatoSize: number,
   slug: string,

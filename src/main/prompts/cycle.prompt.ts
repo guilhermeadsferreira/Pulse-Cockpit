@@ -1,3 +1,6 @@
+// ~80k chars leaves room for perfil.md, config, prompt structure and Claude's output
+const MAX_ARTIFACT_CHARS = 80_000
+
 export interface CyclePromptParams {
   configYaml:    string
   perfilMd:      string
@@ -6,14 +9,35 @@ export interface CyclePromptParams {
   periodoFim:    string
 }
 
-export function buildCyclePrompt(params: CyclePromptParams): string {
+export interface CyclePromptBuildResult {
+  prompt:            string
+  truncatedArtifacts: number  // how many older artifacts were excluded
+  totalArtifacts:    number
+}
+
+export function buildCyclePrompt(params: CyclePromptParams): CyclePromptBuildResult {
   const { configYaml, perfilMd, artifacts, periodoInicio, periodoFim } = params
 
-  const artifactsText = artifacts.length > 0
-    ? artifacts.map(a => `### ${a.date} — ${a.tipo}\n\n${a.content}`).join('\n\n---\n\n')
+  // Budget artifacts from most recent → oldest, stop when limit is reached.
+  // Most recent artifacts are most relevant for calibration; perfil.md covers older history.
+  let charCount = 0
+  const included: typeof artifacts = []
+  for (const artifact of [...artifacts].reverse()) {
+    if (charCount + artifact.content.length > MAX_ARTIFACT_CHARS) break
+    included.unshift(artifact)
+    charCount += artifact.content.length
+  }
+  const truncatedArtifacts = artifacts.length - included.length
+
+  const truncationNote = truncatedArtifacts > 0
+    ? `⚠️ Nota: ${truncatedArtifacts} artefato(s) mais antigo(s) não foram incluídos por limite de contexto. O perfil acumulado (seção acima) já sintetiza esse histórico — use-o como base para o período completo.\n\n---\n\n`
+    : ''
+
+  const artifactsText = included.length > 0
+    ? truncationNote + included.map(a => `### ${a.date} — ${a.tipo}\n\n${a.content}`).join('\n\n---\n\n')
     : '(nenhum artefato encontrado no período selecionado)'
 
-  return `Você é o assistente de um gestor de tecnologia. Gere um relatório de ciclo de avaliação completo para o fórum de calibração.
+  const prompt = `Você é o assistente de um gestor de tecnologia. Gere um relatório de ciclo de avaliação completo para o fórum de calibração.
 
 Período analisado: ${periodoInicio} a ${periodoFim}
 
@@ -52,6 +76,12 @@ Regras:
 - "conclusao_para_calibracao": parágrafo conclusivo (3–5 frases) pronto para ser lido no fórum. Deve incluir recomendação clara: acima das expectativas / dentro das expectativas / abaixo das expectativas.
 - "flag_promovibilidade": "sim" se há evidências claras para promoção neste ciclo, "nao" se não há, "avaliar" se há potencial mas requer mais evidências ou mais tempo.
 - "evidencias_promovibilidade": 3–5 bullets de evidência concreta que sustentam o flag_promovibilidade. Cada bullet deve ser autônomo e citável no fórum: descreva um fato específico (entrega, comportamento, feedback de terceiro) com data ou contexto. Se flag_promovibilidade for "nao", liste as lacunas ou áreas que ainda precisam ser demonstradas para uma futura promoção. Nunca retorne array vazio — sempre há algo a dizer.`
+
+  return {
+    prompt,
+    truncatedArtifacts,
+    totalArtifacts: artifacts.length,
+  }
 }
 
 export interface CycleAIResult {

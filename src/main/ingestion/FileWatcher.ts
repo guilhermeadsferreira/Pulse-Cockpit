@@ -61,6 +61,11 @@ export class FileWatcher {
     return this.pipeline.syncPending(slug)
   }
 
+  // Restore pending items persisted to disk from a previous session
+  restorePending(): void {
+    this.pipeline.restorePending()
+  }
+
   private handleFile(filePath: string): void {
     const lower = filePath.toLowerCase()
     if (!SUPPORTED_EXTENSIONS.some((ext) => lower.endsWith(ext))) return

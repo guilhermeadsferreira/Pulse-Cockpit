@@ -4,7 +4,7 @@
 
 **Criado em:** 2026-03-18
 **Status:** V1 concluída · Auditoria técnica implementada (3 fases) · Estável
-**Última atualização:** 2026-03-19
+**Última atualização:** 2026-03-23
 
 ---
 
@@ -22,6 +22,7 @@
 | YAML | js-yaml | Parse/stringify de config.yaml e actions.yaml |
 | Build tool | electron-vite | Dev server + build orquestrado (main, preload, renderer) |
 | Build/package | electron-builder | Empacotamento para macOS (dmg) |
+| Testes | vitest | Testes unitários do main process (isolado do Electron via mock) |
 
 > **IMPORTANTE:** A IA é invocada via `child_process.spawn('claude', ['-p', prompt])` no Main Process.
 > Nunca usar Anthropic API ou API key. O usuário deve ter o Claude Code CLI instalado e autenticado localmente.
@@ -38,7 +39,8 @@ Main Process (Node.js)
 │   ├── IngestionPipeline — fila paralela (max 3 simultâneos) + per-person lock
 │   ├── FileReader — lê .md/.txt/.pdf
 │   ├── ClaudeRunner — spawn do CLI headless + retry + parse JSON
-│   ├── ArtifactWriter — escreve artefato e atualiza perfil.md atomicamente
+│   ├── ArtifactWriter — escreve artefato e atualiza perfil.md atomicamente (retorna totalArtefatos)
+│   ├── ProfileCompressor — comprime perfil.md a cada 10 artefatos via Claude (fire-and-forget)
 │   └── SchemaValidator — valida schema do JSON retornado pelo Claude
 ├── registry/
 │   ├── PersonRegistry — CRUD de pessoas + getPerfil (com migration automática)
@@ -49,9 +51,10 @@ Main Process (Node.js)
 │   └── ProfileMigration — migra perfil.md entre schema versions
 ├── prompts/
 │   ├── ingestion.prompt.ts
-│   ├── agenda.prompt.ts
+│   ├── agenda.prompt.ts         ← suporta dadosStale para suprimir alertas
 │   ├── agenda-gestor.prompt.ts  ← pauta com o próprio gestor (roll-up do time)
-│   └── cycle.prompt.ts
+│   ├── cycle.prompt.ts          ← orçamento de 80k chars; retorna truncatedArtifacts
+│   └── compression.prompt.ts   ← compressão periódica de perfil.md
 └── workspace/
     └── WorkspaceSetup — cria estrutura de pastas + templates de artefato
 

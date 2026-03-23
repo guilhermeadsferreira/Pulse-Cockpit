@@ -5,12 +5,13 @@ import { ActionRegistry } from '../registry/ActionRegistry'
 import { CURRENT_SCHEMA_VERSION } from '../migration/ProfileMigration'
 
 const SECTION = {
-  resumo:    { open: '<!-- BLOCO GERENCIADO PELA IA — reescrito a cada ingestão -->',          close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  acoes:     { open: '<!-- BLOCO GERENCIADO PELA IA — append de novos itens -->',               close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  atencao:   { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas -->',                       close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  conquistas:{ open: '<!-- BLOCO GERENCIADO PELA IA — append apenas (conquistas) -->',          close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  temas:     { open: '<!-- BLOCO GERENCIADO PELA IA — lista deduplicada, substituída a cada ingestão -->', close: '<!-- FIM DO BLOCO GERENCIADO -->' },
-  historico: { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas, nunca reescrito -->',     close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  resumo:          { open: '<!-- BLOCO GERENCIADO PELA IA — reescrito a cada ingestão -->',                    close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  acoes:           { open: '<!-- BLOCO GERENCIADO PELA IA — append de novos itens -->',                        close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  atencao:         { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas -->',                                close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  conquistas:      { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas (conquistas) -->',                   close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  temas:           { open: '<!-- BLOCO GERENCIADO PELA IA — lista deduplicada, substituída a cada ingestão -->', close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  historico:       { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas, nunca reescrito -->',               close: '<!-- FIM DO BLOCO GERENCIADO -->' },
+  saude_historico: { open: '<!-- BLOCO GERENCIADO PELA IA — append apenas (histórico de saúde) -->',           close: '<!-- FIM DO BLOCO GERENCIADO -->' },
 }
 
 /**
@@ -113,8 +114,9 @@ export class ArtifactWriter {
   /**
    * Updates perfil.md for the given slug using the AI analysis result.
    * Atomic write: writes to perfil.md.tmp then renames.
+   * Returns the updated total_artefatos count so callers can decide whether to compress.
    */
-  updatePerfil(slug: string, result: IngestionAIResult, artifactFileName: string): void {
+  updatePerfil(slug: string, result: IngestionAIResult, artifactFileName: string): { totalArtefatos: number } {
     const perfilPath = join(this.pessoasDir, slug, 'perfil.md')
     const tmpPath    = perfilPath + '.tmp'
     const bakPath    = perfilPath + '.bak'
@@ -136,6 +138,10 @@ export class ArtifactWriter {
 
     writeFileSync(tmpPath, updated, 'utf-8')
     renameSync(tmpPath, perfilPath)
+
+    const totalMatch = updated.match(/total_artefatos:\s*(\d+)/)
+    const totalArtefatos = totalMatch ? parseInt(totalMatch[1]) : 0
+    return { totalArtefatos }
   }
 
   // ── Private helpers ───────────────────────────────────────────
@@ -161,7 +167,7 @@ schema_version: ${CURRENT_SCHEMA_VERSION}
 ultima_atualizacao: "${now}"
 ultima_ingestao: "${today}"
 total_artefatos: 1
-ultimo_1on1: ${result.tipo === '1on1' ? `"${result.data_artefato}"` : 'null'}
+ultimo_1on1: ${['1on1', 'feedback'].includes(result.tipo) && result.necessita_1on1 === false ? `"${result.data_artefato}"` : 'null'}
 alertas_ativos: []
 saude: "${result.indicador_saude}"
 necessita_1on1: ${result.necessita_1on1 ?? false}
@@ -203,6 +209,11 @@ ${SECTION.temas.close}
 ${SECTION.historico.open}
 - ${result.data_artefato} | ${result.tipo} | [${artifactFileName}](../historico/${artifactFileName})
 ${SECTION.historico.close}
+
+## Histórico de Saúde
+${SECTION.saude_historico.open}
+- ${result.data_artefato} | ${result.indicador_saude} | ${result.motivo_indicador}
+${SECTION.saude_historico.close}
 `
   }
 
@@ -252,6 +263,14 @@ ${SECTION.historico.close}
     const histLine = `- ${result.data_artefato} | ${result.tipo} | [${artifactFileName}](../historico/${artifactFileName})`
     updated = this.appendToBlock(updated, 'historico', histLine)
 
+    // 8. Append Histórico de Saúde — adds section if not present (e.g. older perfis)
+    const saudeLine = `- ${result.data_artefato} | ${result.indicador_saude} | ${result.motivo_indicador}`
+    if (updated.includes(SECTION.saude_historico.open)) {
+      updated = this.appendToBlock(updated, 'saude_historico', saudeLine)
+    } else {
+      updated = updated.trimEnd() + `\n\n## Histórico de Saúde\n${SECTION.saude_historico.open}\n${saudeLine}\n${SECTION.saude_historico.close}\n`
+    }
+
     return updated
   }
 
@@ -273,9 +292,11 @@ ${SECTION.historico.close}
     // total_artefatos: increment
     fm = fm.replace(/total_artefatos:\s*(\d+)/, (_, n) => `total_artefatos: ${parseInt(n) + 1}`)
 
-    // ultimo_1on1: update for explicit 1:1s or for any bilateral artifact where no urgent 1:1 is needed
-    // (covers informal 1:1s that happened inside meetings)
-    if (result.tipo === '1on1' || result.necessita_1on1 === false) {
+    // ultimo_1on1: only update for genuinely bilateral encounters.
+    // Group meetings (daily, planning, retro, reuniao) never count as a 1:1 —
+    // they would reset the counter incorrectly even without a real bilateral meeting.
+    const BILATERAL_TIPOS = ['1on1', 'feedback']
+    if (BILATERAL_TIPOS.includes(result.tipo) && result.necessita_1on1 === false) {
       fm = fm.replace(/ultimo_1on1:.*/, `ultimo_1on1: "${result.data_artefato}"`)
     }
 
@@ -343,19 +364,28 @@ ${SECTION.historico.close}
 
   /**
    * Marks resolved attention points with strikethrough in the atencao block.
-   * Matches by looking for lines containing resolved text (substring match, case-insensitive).
+   *
+   * Uses bidirectional normalized match to handle two failure modes:
+   * - False negative: Claude omits the "**YYYY-MM-DD:**" date prefix stored in the perfil
+   * - False positive: 40-char prefix overlap between similar points
+   *
+   * A match is valid only when both normalized strings are >= 15 chars
+   * (prevents accidental matches on very short fragments).
    */
   private markResolvedPoints(content: string, resolvidos: string[], today: string): string {
     const { open, close } = SECTION.atencao
     const escapedOpen  = open.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const escapedClose = close.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const re = new RegExp(`(${escapedOpen}\n)([\\s\\S]*?)(\n${escapedClose})`)
+    const normalizedResolvidos = resolvidos.map(normalizePointText).filter((r) => r.length >= 15)
     return content.replace(re, (_match, blockOpen, body, blockClose) => {
       const lines = body.split('\n')
       const marked = lines.map((line: string) => {
         if (line.startsWith('~~')) return line // already resolved
-        const isResolved = resolvidos.some((r) =>
-          line.toLowerCase().includes(r.slice(0, 40).toLowerCase())
+        const normalizedLine = normalizePointText(line)
+        if (normalizedLine.length < 15) return line
+        const isResolved = normalizedResolvidos.some((r) =>
+          normalizedLine.includes(r) || r.includes(normalizedLine)
         )
         if (isResolved) return `~~${line}~~ ✓ *(resolvido em ${today})*`
         return line
@@ -374,6 +404,25 @@ ${SECTION.historico.close}
     const m = content.match(re)
     return m ? m[1] : ''
   }
+}
+
+/**
+ * Strips date prefix, markdown markers and normalizes whitespace for point matching.
+ * Input:  "- **2026-03-10:** Dificuldade com comunicação no time A"
+ * Output: "dificuldade com comunicação no time a"
+ *
+ * Also handles already-resolved lines:
+ * Input:  "~~- **2026-03-10:** Ponto antigo~~ ✓ *(resolvido em 2026-03-20)*"
+ * Output: "" (empty — will be skipped by length guard)
+ */
+function normalizePointText(text: string): string {
+  return text
+    .replace(/^\s*~~.*?~~\s*✓.*$/i, '')             // full strikethrough line → empty
+    .replace(/^\s*-\s*/, '')                         // leading "- "
+    .replace(/\*\*\d{4}-\d{2}-\d{2}:\*\*\s*/i, '')  // "**YYYY-MM-DD:** "
+    .replace(/\*\*/g, '')                             // bold markers
+    .toLowerCase()
+    .trim()
 }
 
 function tipoLabel(tipo: string): string {
