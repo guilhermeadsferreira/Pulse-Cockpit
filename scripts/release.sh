@@ -66,4 +66,4 @@ git push && git push --tags
 
 echo ""
 echo "✓ Release v$NEW publicada com sucesso."
-echo "  https://github.com/guilhermeadsferreira/mgr-cockpit/releases/tag/v$NEW"
+echo "  https://github.com/guilhermeadsferreira/Pulse-Cockpit/releases/tag/v$NEW"
