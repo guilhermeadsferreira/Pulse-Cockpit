@@ -83,6 +83,10 @@ export function validateIngestionResult(data: unknown): ValidationResult {
     }
   }
 
+  if (obj.confianca !== undefined && !['alta', 'media', 'baixa'].includes(obj.confianca as string)) {
+    typeErrors.push(`confianca inválido: "${obj.confianca}" — esperado alta|media|baixa`)
+  }
+
   return {
     valid: missingFields.length === 0 && typeErrors.length === 0,
     missingFields,

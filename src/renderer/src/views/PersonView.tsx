@@ -196,7 +196,20 @@ export function PersonView() {
 
               {fm && (
                 <InfoCard title="Saúde">
-                  <InfoRow label="Indicador"      value={fm.saude ? labelSaude(fm.saude) : '—'} />
+                  <InfoRow
+                    label="Indicador"
+                    value={fm.saude ? labelSaude(fm.saude) : '—'}
+                    suffix={fm.ultima_confianca === 'baixa' ? (
+                      <span title="Baseado em artefato com evidência limitada (curto, ambíguo ou fragmentado)" style={{
+                        fontSize: 9.5, fontWeight: 600, letterSpacing: '0.04em',
+                        padding: '1px 5px', borderRadius: 3,
+                        background: 'rgba(232,135,58,0.12)', border: '1px solid rgba(232,135,58,0.35)',
+                        color: '#e8873a', whiteSpace: 'nowrap', cursor: 'help',
+                      }}>
+                        evidência limitada
+                      </span>
+                    ) : undefined}
+                  />
                   <InfoRow label="Ações pendentes" value={String(fm.acoes_pendentes_count ?? 0)} />
                   <InfoRow label="Total artefatos" value={String(fm.total_artefatos ?? 0)} />
                 </InfoCard>
@@ -1070,19 +1083,22 @@ function InfoCard({ title, children }: { title: string; children: React.ReactNod
   )
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+function InfoRow({ label, value, mono, suffix }: { label: string; value: string; mono?: boolean; suffix?: React.ReactNode }) {
   return (
     <div style={{
       padding: '9px 16px', display: 'flex', justifyContent: 'space-between',
       alignItems: 'center', borderBottom: '1px solid var(--border-subtle)',
     }}>
       <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{label}</span>
-      <span style={{
-        fontSize: mono ? 11 : 12, fontWeight: 500, color: 'var(--text-primary)',
-        fontFamily: mono ? 'JetBrains Mono, monospace' : undefined,
-      }}>
-        {value}
-      </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{
+          fontSize: mono ? 11 : 12, fontWeight: 500, color: 'var(--text-primary)',
+          fontFamily: mono ? 'JetBrains Mono, monospace' : undefined,
+        }}>
+          {value}
+        </span>
+        {suffix}
+      </div>
     </div>
   )
 }

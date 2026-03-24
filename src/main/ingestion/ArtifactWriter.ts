@@ -40,12 +40,14 @@ export class ArtifactWriter {
     const titulo = result.titulo ?? `${tipoLabel(tipo)} — ${slug} · ${date}`
     const participantes = result.participantes_nomes ?? []
 
+    const confianca = result.confianca ?? 'media'
     const lines: string[] = [
       `---`,
       `tipo: ${tipo}`,
       `data: ${date}`,
       `pessoa: ${slug}`,
       `saude: ${indicador_saude}`,
+      `confianca: ${confianca}`,
       `---`,
       ``,
       `# ${titulo}`,
@@ -170,6 +172,7 @@ total_artefatos: 1
 ultimo_1on1: ${['1on1', 'feedback'].includes(result.tipo) && result.necessita_1on1 === false ? `"${result.data_artefato}"` : 'null'}
 alertas_ativos: []
 saude: "${result.indicador_saude}"
+ultima_confianca: "${result.confianca ?? 'media'}"
 necessita_1on1: ${result.necessita_1on1 ?? false}
 motivo_1on1: ${result.motivo_1on1 ? `"${result.motivo_1on1}"` : 'null'}
 alerta_estagnacao: ${result.alerta_estagnacao ?? false}
@@ -300,8 +303,14 @@ ${SECTION.saude_historico.close}
       fm = fm.replace(/ultimo_1on1:.*/, `ultimo_1on1: "${result.data_artefato}"`)
     }
 
-    // saude
+    // saude + ultima_confianca
     fm = fm.replace(/saude:.*/, `saude: "${result.indicador_saude}"`)
+    const confianca = result.confianca ?? 'media'
+    if (/ultima_confianca:/.test(fm)) {
+      fm = fm.replace(/ultima_confianca:.*/, `ultima_confianca: "${confianca}"`)
+    } else {
+      fm = fm.replace(/saude:.*/, `saude: "${result.indicador_saude}"\nultima_confianca: "${confianca}"`)
+    }
 
     // necessita_1on1 + motivo_1on1
     const necessita = result.necessita_1on1 ?? false

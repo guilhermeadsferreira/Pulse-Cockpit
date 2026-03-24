@@ -72,6 +72,7 @@ Regras obrigatórias:
 - "motivo_estagnacao": se alerta_estagnacao for true, 1 frase descrevendo o padrão detectado (ex: "Sem novas entregas ou aprendizados registrados nos últimos 3 meses"). Se false, null.
 - "sinal_evolucao": true se este artefato traz evidência clara de crescimento, aprendizado ou evolução em relação ao perfil anterior (nova habilidade demonstrada, entrega significativa, feedback positivo de terceiros, avanço no PDI).
 - "evidencia_evolucao": se sinal_evolucao for true, 1 frase descrevendo a evidência (ex: "Liderou sozinho a refatoração do serviço de auth e recebeu elogio do time"). Se false, null.
+- "confianca": nível de confiança nas inferências feitas neste artefato. Use "alta" quando o artefato é rico (1:1 detalhado, feedback estruturado, reunião com contexto claro). Use "media" para reuniões coletivas com participação razoável. Use "baixa" quando o artefato for curto (< 300 palavras), uma transcrição muito fragmentada, ambíguo demais para inferências sólidas, ou com evidências contraditórias. Quando "baixa": seja conservador — prefira "verde" ou "amarelo" no indicador_saude quando há dúvida, e evite marcar necessita_1on1: true ou alerta_estagnacao: true sem evidência clara.
 
 JSON esperado:
 {
@@ -99,7 +100,8 @@ JSON esperado:
   "alerta_estagnacao": true,
   "motivo_estagnacao": "string ou null",
   "sinal_evolucao": true,
-  "evidencia_evolucao": "string ou null"
+  "evidencia_evolucao": "string ou null",
+  "confianca": "alta|media|baixa"
 }`
 }
 
@@ -129,4 +131,5 @@ export interface IngestionAIResult {
   motivo_estagnacao: string | null
   sinal_evolucao: boolean
   evidencia_evolucao: string | null
+  confianca?: 'alta' | 'media' | 'baixa'  // optional — defaults to 'media' if absent
 }

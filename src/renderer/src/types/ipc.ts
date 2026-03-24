@@ -69,6 +69,7 @@ export interface PerfilFrontmatter {
   acoes_pendentes_count: number        // computed from ActionRegistry (injected in IPC handler)
   alertas_ativos:        string[]
   saude:                 'verde' | 'amarelo' | 'vermelho'
+  ultima_confianca?:     'alta' | 'media' | 'baixa'
   necessita_1on1:        boolean
   motivo_1on1:           string | null
   alerta_estagnacao:     boolean
