@@ -199,6 +199,7 @@ export type DemandaOrigem = 'Líder' | 'Liderado' | 'Par' | 'Eu'
 export interface Demanda {
   id:              string
   descricao:       string
+  descricaoLonga?: string | null  // descrição detalhada opcional
   origem:          DemandaOrigem
   prazo?:          string | null  // YYYY-MM-DD
   criadoEm:        string         // YYYY-MM-DD

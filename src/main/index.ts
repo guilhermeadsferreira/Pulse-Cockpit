@@ -290,6 +290,12 @@ function registerIpcHandlers(): void {
     return new ActionRegistry(workspacePath).list(slug)
   })
 
+  ipcMain.handle('actions:save', (_event, action: unknown) => {
+    const { workspacePath } = SettingsManager.load()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    new ActionRegistry(workspacePath).save(action as any)
+  })
+
   ipcMain.handle('actions:update-status', (_event, slug: string, id: string, status: string) => {
     const { workspacePath } = SettingsManager.load()
     new ActionRegistry(workspacePath).updateStatus(slug, id, status as 'open' | 'done' | 'cancelled')

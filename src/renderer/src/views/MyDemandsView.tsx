@@ -1,8 +1,21 @@
 import { useState, useEffect } from 'react'
-import { Plus, Check, Trash2, Pencil, X } from 'lucide-react'
+import { Plus, Check, Trash2, Pencil, X, ChevronDown, ChevronUp } from 'lucide-react'
 import type { Demanda, DemandaOrigem, DemandaStatus } from '../types/ipc'
 
 const ORIGENS: DemandaOrigem[] = ['Líder', 'Liderado', 'Par', 'Eu']
+
+type TagFiltro = 'todas' | 'vencida' | 'hoje' | 'amanha' | 'esta_semana' | 'proxima_semana' | 'este_mes' | 'sem_prazo'
+
+const TAGS_FILTRO: { id: TagFiltro; label: string }[] = [
+  { id: 'todas', label: 'Todas' },
+  { id: 'hoje', label: 'Hoje' },
+  { id: 'amanha', label: 'Amanhã' },
+  { id: 'esta_semana', label: 'Esta semana' },
+  { id: 'proxima_semana', label: 'Semana que vem' },
+  { id: 'este_mes', label: 'Este mês' },
+  { id: 'vencida', label: 'Vencidas' },
+  { id: 'sem_prazo', label: 'Sem prazo' },
+]
 
 function genId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -32,6 +45,19 @@ function daysUntilEndOfWeek(): number {
   return 6 - daysSinceMonday // dias até domingo (fim da semana ISO)
 }
 
+function getTagFromPrazo(prazo: string | null | undefined): TagFiltro {
+  if (!prazo) return 'sem_prazo'
+  const diff = daysUntil(prazo)
+  const endOfWeek = daysUntilEndOfWeek()
+  if (diff < 0) return 'vencida'
+  if (diff === 0) return 'hoje'
+  if (diff === 1) return 'amanha'
+  if (diff <= endOfWeek) return 'esta_semana'
+  if (diff <= endOfWeek + 7) return 'proxima_semana'
+  if (diff <= 30) return 'este_mes'
+  return 'este_mes'
+}
+
 function deadlineBadge(prazo: string): { label: string; color: string; bg: string; border: string } {
   const diff = daysUntil(prazo)
   const endOfWeek = daysUntilEndOfWeek()
@@ -47,15 +73,18 @@ function deadlineBadge(prazo: string): { label: string; color: string; bg: strin
 export function MyDemandsView() {
   const [demandas, setDemandas]           = useState<Demanda[]>([])
   const [activeTab, setActiveTab]         = useState<'open' | 'done'>('open')
+  const [tagFiltro, setTagFiltro]         = useState<TagFiltro>('todas')
   const [showForm, setShowForm]           = useState(false)
   const [editing, setEditing]             = useState<Demanda | null>(null)
-  const [markingDone, setMarkingDone]     = useState<string | null>(null)   // id of demanda being marked done
+  const [markingDone, setMarkingDone]     = useState<string | null>(null)
   const [addToCiclo, setAddToCiclo]       = useState(false)
-  const [deleting, setDeleting]           = useState<string | null>(null)   // id pending confirmation
+  const [deleting, setDeleting]           = useState<string | null>(null)
+  const [expandedDesc, setExpandedDesc]   = useState<string | null>(null)
 
-  const [formDesc, setFormDesc]     = useState('')
-  const [formOrigem, setFormOrigem] = useState<DemandaOrigem>('Eu')
-  const [formPrazo, setFormPrazo]   = useState('')
+  const [formDesc, setFormDesc]           = useState('')
+  const [formDescLonga, setFormDescLonga] = useState('')
+  const [formOrigem, setFormOrigem]       = useState<DemandaOrigem>('Eu')
+  const [formPrazo, setFormPrazo]         = useState('')
 
   useEffect(() => { load() }, [])
 
@@ -71,6 +100,7 @@ export function MyDemandsView() {
   function openNew() {
     setEditing(null)
     setFormDesc('')
+    setFormDescLonga('')
     setFormOrigem('Eu')
     setFormPrazo('')
     setShowForm(true)
@@ -79,6 +109,7 @@ export function MyDemandsView() {
   function openEdit(d: Demanda) {
     setEditing(d)
     setFormDesc(d.descricao)
+    setFormDescLonga(d.descricaoLonga ?? '')
     setFormOrigem(d.origem)
     setFormPrazo(d.prazo ?? '')
     setShowForm(true)
@@ -88,6 +119,7 @@ export function MyDemandsView() {
     setShowForm(false)
     setEditing(null)
     setFormDesc('')
+    setFormDescLonga('')
     setFormOrigem('Eu')
     setFormPrazo('')
   }
@@ -96,9 +128,10 @@ export function MyDemandsView() {
     if (!formDesc.trim()) return
     const t = today()
     const prazo = formPrazo || null
+    const descricaoLonga = formDescLonga.trim() || null
     const demanda: Demanda = editing
-      ? { ...editing, descricao: formDesc.trim(), origem: formOrigem, prazo, atualizadoEm: t }
-      : { id: genId(), descricao: formDesc.trim(), origem: formOrigem, prazo, criadoEm: t, atualizadoEm: t, status: 'open' }
+      ? { ...editing, descricao: formDesc.trim(), descricaoLonga, origem: formOrigem, prazo, atualizadoEm: t }
+      : { id: genId(), descricao: formDesc.trim(), descricaoLonga, origem: formOrigem, prazo, criadoEm: t, atualizadoEm: t, status: 'open' }
     await window.api.eu.saveDemanda(demanda)
     await load()
     notify()
@@ -120,14 +153,11 @@ export function MyDemandsView() {
     setDeleting(null)
   }
 
+  // Ordenação por data de cadastro (mais novas primeiro)
   const open = demandas
     .filter((d) => d.status === 'open')
-    .sort((a, b) => {
-      if (a.prazo && b.prazo) return a.prazo.localeCompare(b.prazo)
-      if (a.prazo) return -1
-      if (b.prazo) return 1
-      return a.atualizadoEm.localeCompare(b.atualizadoEm)
-    })
+    .filter((d) => tagFiltro === 'todas' || getTagFromPrazo(d.prazo) === tagFiltro)
+    .sort((a, b) => b.criadoEm.localeCompare(a.criadoEm))
 
   const done = demandas
     .filter((d) => d.status === 'done')
@@ -181,27 +211,62 @@ export function MyDemandsView() {
         </button>
       </div>
 
+      {/* Filtros por tag (só na aba abertas) */}
+      {activeTab === 'open' && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          {TAGS_FILTRO.map((tag) => (
+            <button
+              key={tag.id}
+              onClick={() => setTagFiltro(tag.id)}
+              style={{
+                padding: '4px 10px', borderRadius: 12, fontSize: 11.5,
+                background: tagFiltro === tag.id ? 'var(--accent-dim)' : 'var(--surface)',
+                border: `1px solid ${tagFiltro === tag.id ? 'rgba(192,135,58,0.4)' : 'var(--border)'}`,
+                color: tagFiltro === tag.id ? 'var(--accent)' : 'var(--text-secondary)',
+                cursor: 'pointer', fontFamily: 'var(--font)',
+                fontWeight: tagFiltro === tag.id ? 500 : 400,
+                transition: 'all 0.12s',
+              }}
+            >
+              {tag.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Form */}
       {showForm && (
         <div style={{
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           borderRadius: 8, padding: 16, marginBottom: 16,
         }}>
-          <textarea
+          <input
             autoFocus
             value={formDesc}
             onChange={(e) => setFormDesc(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submitForm() }}
-            placeholder="Descreva a demanda..."
-            rows={3}
+            placeholder="Título da demanda..."
+            style={{
+              width: '100%', padding: '8px 10px',
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 6, color: 'var(--text-primary)', fontSize: 13,
+              fontFamily: 'var(--font)', outline: 'none', boxSizing: 'border-box',
+              marginBottom: 8,
+            }}
+          />
+          <textarea
+            value={formDescLonga}
+            onChange={(e) => setFormDescLonga(e.target.value)}
+            placeholder="Descrição detalhada (opcional)..."
+            rows={4}
             style={{
               width: '100%', resize: 'vertical', padding: '8px 10px',
               background: 'var(--surface)', border: '1px solid var(--border)',
               borderRadius: 6, color: 'var(--text-primary)', fontSize: 13,
               fontFamily: 'var(--font)', outline: 'none', boxSizing: 'border-box',
+              marginBottom: 10,
             }}
           />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Origem</label>
             <select
               value={formOrigem}
@@ -248,7 +313,9 @@ export function MyDemandsView() {
       {/* List */}
       {list.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-          {activeTab === 'open' ? 'Nenhuma demanda aberta.' : 'Nenhuma demanda concluída ainda.'}
+          {activeTab === 'open'
+            ? (tagFiltro === 'todas' ? 'Nenhuma demanda aberta.' : 'Nenhuma demanda com esse filtro.')
+            : 'Nenhuma demanda concluída ainda.'}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -270,7 +337,38 @@ export function MyDemandsView() {
                 }}>
                   {d.descricao}
                 </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+
+                {/* Descrição longa (expansível) */}
+                {d.descricaoLonga && (
+                  <div style={{ marginTop: 8 }}>
+                    <button
+                      onClick={() => setExpandedDesc(expandedDesc === d.id ? null : d.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 4,
+                        fontSize: 11, color: 'var(--text-muted)',
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: 0, fontFamily: 'var(--font)',
+                      }}
+                    >
+                      {expandedDesc === d.id ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                      {expandedDesc === d.id ? 'Ocultar descrição' : 'Ver descrição'}
+                    </button>
+                    {expandedDesc === d.id && (
+                      <div style={{
+                        marginTop: 8, padding: 10,
+                        background: 'var(--surface-2)',
+                        borderRadius: 6, fontSize: 12.5,
+                        color: 'var(--text-secondary)',
+                        lineHeight: 1.5,
+                        whiteSpace: 'pre-wrap',
+                      }}>
+                        {d.descricaoLonga}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span style={{
                     fontSize: 10.5, fontFamily: 'var(--font-mono)',
                     color: origemColor[d.origem],
@@ -294,11 +392,12 @@ export function MyDemandsView() {
                       </span>
                     )
                   })()}
-                  {d.status === 'open' ? (
+                  {d.status === 'open' && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                      há {daysSince(d.atualizadoEm)}d sem atualização
+                      criada {formatDate(d.criadoEm)} · há {daysSince(d.atualizadoEm)}d sem atualização
                     </span>
-                  ) : (
+                  )}
+                  {d.status === 'done' && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                       concluída em {formatDate(d.concluidoEm ?? d.atualizadoEm)}
                     </span>

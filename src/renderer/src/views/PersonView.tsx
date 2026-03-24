@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, FileText, CalendarDays, Pencil, ExternalLink, RefreshCw, Loader2, CheckSquare, Square, X } from 'lucide-react'
+import { ArrowLeft, FileText, CalendarDays, Pencil, ExternalLink, RefreshCw, Loader2, CheckSquare, Square, X, Plus, ArrowUpRight } from 'lucide-react'
 import { useRouter } from '../router'
-import type { PersonConfig, PerfilData, ArtifactMeta, PautaMeta, AgendaResult, Action } from '../types/ipc'
+import type { PersonConfig, PerfilData, ArtifactMeta, PautaMeta, AgendaResult, Action, ActionOwner, Demanda } from '../types/ipc'
 import { MarkdownPreview } from '../components/MarkdownPreview'
 import { labelNivel, labelRelacao, labelSaude, labelTipo, fmtDate as fmtDateUtil } from '../lib/utils'
 import { CycleTab } from './CycleReportView'
@@ -271,9 +271,28 @@ export function PersonView() {
               {activeTab === 'acoes'     && (
                 <AcoesTab
                   actions={actions}
+                  personSlug={person.slug}
                   onUpdateStatus={async (id, status) => {
                     await window.api.actions.updateStatus(person.slug, id, status)
                     loadActions(person.slug)
+                  }}
+                  onSaveAction={async (action) => {
+                    await window.api.actions.save(action)
+                    loadActions(person.slug)
+                  }}
+                  onSendToDemandas={async (action) => {
+                    const t = new Date().toISOString().slice(0, 10)
+                    const demanda: Demanda = {
+                      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                      descricao: action.texto,
+                      origem: 'Liderado',
+                      prazo: action.prazo ?? null,
+                      criadoEm: t,
+                      atualizadoEm: t,
+                      status: 'open',
+                    }
+                    await window.api.eu.saveDemanda(demanda)
+                    window.dispatchEvent(new Event('demandas:changed'))
                   }}
                 />
               )}
@@ -586,54 +605,219 @@ function PautaCard({ pauta: p }: { pauta: PautaMeta }) {
 
 function AcoesTab({
   actions,
+  personSlug,
   onUpdateStatus,
+  onSaveAction,
+  onSendToDemandas,
 }: {
   actions: Action[]
+  personSlug: string
   onUpdateStatus: (id: string, status: 'open' | 'done' | 'cancelled') => Promise<void>
+  onSaveAction: (action: Action) => Promise<void>
+  onSendToDemandas: (action: Action) => Promise<void>
 }) {
-  if (actions.length === 0) {
-    return (
-      <PlaceholderTab
-        icon={<CheckSquare size={28} />}
-        title="Ações"
-        desc="Ações comprometidas nos artefatos aparecerão aqui automaticamente após a ingestão."
-        fase="Aguardando ingestão"
-      />
-    )
+  const [activeTab, setActiveTab]       = useState<'open' | 'done' | 'cancelled'>('open')
+  const [showForm, setShowForm]         = useState(false)
+  const [formTexto, setFormTexto]       = useState('')
+  const [formOwner, setFormOwner]       = useState<ActionOwner>('liderado')
+  const [formPrazo, setFormPrazo]       = useState('')
+  const [sentToDemandas, setSentToDemandas] = useState<string | null>(null)
+
+  async function submitForm() {
+    if (!formTexto.trim()) return
+    const t = new Date().toISOString().slice(0, 10)
+    const action: Action = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      personSlug,
+      texto: formTexto.trim(),
+      owner: formOwner,
+      status: 'open',
+      criadoEm: t,
+      prazo: formPrazo || null,
+    }
+    await onSaveAction(action)
+    setShowForm(false)
+    setFormTexto('')
+    setFormOwner('liderado')
+    setFormPrazo('')
   }
 
-  const open      = actions.filter((a) => a.status === 'open')
-  const done      = actions.filter((a) => a.status === 'done')
-  const cancelled = actions.filter((a) => a.status === 'cancelled')
+  async function handleSendToDemandas(action: Action) {
+    await onSendToDemandas(action)
+    setSentToDemandas(action.id)
+    setTimeout(() => setSentToDemandas(null), 2500)
+  }
+
+  const openList      = actions.filter((a) => a.status === 'open')
+  const doneList      = actions.filter((a) => a.status === 'done')
+  const cancelledList = actions.filter((a) => a.status === 'cancelled')
+  const currentList   = activeTab === 'open' ? openList : activeTab === 'done' ? doneList : cancelledList
+
+  const lideradoActions = currentList.filter((a) => !a.owner || a.owner === 'liderado' || a.owner === 'terceiro')
+  const gestorActions   = currentList.filter((a) => a.owner === 'gestor')
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {open.length > 0 && (
-        <PerfilSection title={`Em aberto (${open.length})`}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {open.map((a) => (
-              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
-            ))}
+    <div>
+      {/* Header */}
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+        marginBottom: 16, borderBottom: '1px solid var(--border-subtle)',
+      }}>
+        <div style={{ display: 'flex', gap: 0 }}>
+          {([
+            { id: 'open',      label: `Abertas (${openList.length})` },
+            { id: 'done',      label: `Concluídas (${doneList.length})` },
+            { id: 'cancelled', label: `Canceladas (${cancelledList.length})` },
+          ] as const).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              style={{
+                padding: '7px 14px', borderRadius: 0, fontSize: 12.5,
+                background: 'transparent', border: 'none',
+                borderBottom: activeTab === id ? '2px solid var(--accent)' : '2px solid transparent',
+                color: activeTab === id ? 'var(--text-primary)' : 'var(--text-muted)',
+                cursor: 'pointer', fontFamily: 'var(--font)',
+                fontWeight: activeTab === id ? 600 : 400,
+                marginBottom: -1,
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={() => setShowForm(true)}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '6px 14px', borderRadius: 6, fontSize: 12.5, fontWeight: 500,
+            background: 'var(--accent-dim)', border: '1px solid rgba(192,135,58,0.3)',
+            color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font)',
+            marginBottom: 8,
+          }}
+        >
+          <Plus size={13} /> Nova ação
+        </button>
+      </div>
+
+      {/* Form */}
+      {showForm && (
+        <div style={{
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: 16, marginBottom: 16,
+        }}>
+          <input
+            autoFocus
+            value={formTexto}
+            onChange={(e) => setFormTexto(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitForm()}
+            placeholder="Descreva a ação..."
+            style={{
+              width: '100%', padding: '8px 10px', boxSizing: 'border-box',
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 6, color: 'var(--text-primary)', fontSize: 13,
+              fontFamily: 'var(--font)', outline: 'none', marginBottom: 10,
+            }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Responsável</label>
+            <select
+              value={formOwner}
+              onChange={(e) => setFormOwner(e.target.value as ActionOwner)}
+              style={{
+                padding: '4px 8px', borderRadius: 6, fontSize: 12.5,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                color: 'var(--text-primary)', fontFamily: 'var(--font)', cursor: 'pointer',
+              }}
+            >
+              <option value="liderado">Liderado</option>
+              <option value="gestor">Eu (gestor)</option>
+            </select>
+            <label style={{ fontSize: 12, color: 'var(--text-secondary)', marginLeft: 6 }}>Prazo</label>
+            <input
+              type="date"
+              value={formPrazo}
+              onChange={(e) => setFormPrazo(e.target.value)}
+              style={{
+                padding: '4px 8px', borderRadius: 6, fontSize: 12.5,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                color: formPrazo ? 'var(--text-primary)' : 'var(--text-muted)',
+                fontFamily: 'var(--font)', cursor: 'pointer',
+              }}
+            />
+            {formPrazo && (
+              <button
+                onClick={() => setFormPrazo('')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '0 2px', fontSize: 12 }}
+              >×</button>
+            )}
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => { setShowForm(false); setFormTexto(''); setFormOwner('liderado'); setFormPrazo('') }}
+                style={acoesStyles.btnSecondary}
+              >Cancelar</button>
+              <button onClick={submitForm} style={acoesStyles.btnPrimary} disabled={!formTexto.trim()}>
+                Criar
+              </button>
+            </div>
           </div>
-        </PerfilSection>
+        </div>
       )}
-      {done.length > 0 && (
-        <PerfilSection title={`Concluídas (${done.length})`}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {done.map((a) => (
-              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
-            ))}
-          </div>
-        </PerfilSection>
+
+      {/* Empty state */}
+      {currentList.length === 0 && !showForm && (
+        <PlaceholderTab
+          icon={<CheckSquare size={28} />}
+          title="Nenhuma ação"
+          desc={activeTab === 'open'
+            ? 'Ações dos artefatos aparecerão aqui após ingestão. Você também pode criar manualmente.'
+            : `Nenhuma ação ${activeTab === 'done' ? 'concluída' : 'cancelada'} ainda.`}
+          fase={activeTab === 'open' ? 'Aguardando ingestão' : '—'}
+        />
       )}
-      {cancelled.length > 0 && (
-        <PerfilSection title={`Canceladas (${cancelled.length})`}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {cancelled.map((a) => (
+
+      {/* Do liderado */}
+      {lideradoActions.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+            textTransform: 'uppercase' as const, color: 'var(--text-muted)',
+            padding: '8px 0 6px', marginBottom: 4,
+            borderBottom: '1px solid var(--border-subtle)',
+          }}>
+            Do liderado · {lideradoActions.length}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {lideradoActions.map((a) => (
               <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
             ))}
           </div>
-        </PerfilSection>
+        </div>
+      )}
+
+      {/* Minhas (gestor) */}
+      {gestorActions.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{
+            fontSize: 10, fontWeight: 600, letterSpacing: '0.1em',
+            textTransform: 'uppercase' as const, color: 'var(--text-muted)',
+            padding: '8px 0 6px', marginBottom: 4,
+            borderBottom: '1px solid var(--border-subtle)',
+          }}>
+            Minhas — gestor · {gestorActions.length}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {gestorActions.map((a) => (
+              <ActionRow
+                key={a.id}
+                action={a}
+                onUpdateStatus={onUpdateStatus}
+                onSendToDemandas={a.status === 'open' ? handleSendToDemandas : undefined}
+                sentToDemandas={sentToDemandas === a.id}
+              />
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )
@@ -642,9 +826,13 @@ function AcoesTab({
 function ActionRow({
   action: a,
   onUpdateStatus,
+  onSendToDemandas,
+  sentToDemandas,
 }: {
   action: Action
   onUpdateStatus: (id: string, status: 'open' | 'done' | 'cancelled') => Promise<void>
+  onSendToDemandas?: (action: Action) => Promise<void>
+  sentToDemandas?: boolean
 }) {
   const isDone      = a.status === 'done'
   const isCancelled = a.status === 'cancelled'
@@ -673,7 +861,12 @@ function ActionRow({
         }}>
           {a.texto}
         </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 3 }}>
+        <div style={{ display: 'flex', gap: 10, marginTop: 3, flexWrap: 'wrap' }}>
+          {a.prazo && !isDone && !isCancelled && (
+            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              prazo {fmtDate(a.prazo)}
+            </span>
+          )}
           {a.fonteArtefato && (
             <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
               {a.fonteArtefato}
@@ -691,20 +884,56 @@ function ActionRow({
           )}
         </div>
       </div>
-      {!isCancelled && (
-        <button
-          onClick={() => onUpdateStatus(a.id, a.status === 'cancelled' ? 'open' : 'cancelled')}
-          title="Cancelar"
-          style={{
-            background: 'none', border: 'none', padding: 0, cursor: 'pointer',
-            color: 'var(--text-muted)', flexShrink: 0,
-          }}
-        >
-          <X size={13} />
-        </button>
-      )}
+      <div style={{ display: 'flex', gap: 4, flexShrink: 0, alignItems: 'center', marginTop: 1 }}>
+        {onSendToDemandas && (
+          sentToDemandas ? (
+            <span style={{ fontSize: 11, color: 'var(--accent)', padding: '2px 6px' }}>✓ adicionada</span>
+          ) : (
+            <button
+              onClick={() => onSendToDemandas(a)}
+              title="Adicionar nas minhas demandas"
+              style={{
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 8px', borderRadius: 5, fontSize: 11,
+                background: 'var(--accent-dim)', border: '1px solid rgba(192,135,58,0.25)',
+                color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              <ArrowUpRight size={11} /> Minhas demandas
+            </button>
+          )
+        )}
+        {!isCancelled && (
+          <button
+            onClick={() => onUpdateStatus(a.id, 'cancelled')}
+            title="Cancelar"
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              color: 'var(--text-muted)', flexShrink: 0,
+            }}
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
     </div>
   )
+}
+
+// ── Ações shared styles ────────────────────────────────────────────────────────
+
+const acoesStyles = {
+  btnPrimary: {
+    padding: '4px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
+    background: 'var(--accent-dim)', border: '1px solid rgba(192,135,58,0.3)',
+    color: 'var(--accent)', cursor: 'pointer', fontFamily: 'var(--font)',
+  } as React.CSSProperties,
+  btnSecondary: {
+    padding: '4px 12px', borderRadius: 6, fontSize: 12,
+    background: 'transparent', border: '1px solid var(--border)',
+    color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'var(--font)',
+  } as React.CSSProperties,
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────────

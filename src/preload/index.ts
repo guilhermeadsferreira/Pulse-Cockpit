@@ -40,6 +40,7 @@ contextBridge.exposeInMainWorld('api', {
 
   actions: {
     list:         (slug: string)                              => ipcRenderer.invoke('actions:list', slug),
+    save:         (action: unknown)                           => ipcRenderer.invoke('actions:save', action),
     updateStatus: (slug: string, id: string, status: string) => ipcRenderer.invoke('actions:update-status', slug, id, status),
   },
 

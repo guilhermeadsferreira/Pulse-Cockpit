@@ -285,6 +285,7 @@ A migração é transparente — aplicada em `PersonRegistry.getPerfil()` e pers
 | `ingestion:queue` | renderer → main | Retorna fila atual |
 | `ingestion:enqueue` | renderer → main | Enfileira arquivo manualmente |
 | `actions:list` | renderer → main | Lista ações de uma pessoa |
+| `actions:save` | renderer → main | Cria ou atualiza uma ação (criação manual) |
 | `actions:update-status` | renderer → main | Atualiza status de uma ação |
 | `ai:test` | renderer → main | Testa o Claude CLI |
 | `ai:generate-agenda` | renderer → main | Gera pauta de 1:1 |
