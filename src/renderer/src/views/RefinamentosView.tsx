@@ -100,7 +100,7 @@ export function RefinamentosView() {
               border: `1.5px dashed ${isDragging ? 'var(--accent)' : 'var(--border)'}`,
               borderRadius: 8,
               padding: '14px 12px',
-              textAlign: 'center',
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
               cursor: 'default',
               background: isDragging ? 'var(--accent-dim)' : 'transparent',
               transition: 'border-color 0.15s, background 0.15s',
@@ -218,7 +218,7 @@ export function RefinamentosView() {
                 <div className="markdown-body" style={{
                   fontSize: 13.5, lineHeight: 1.7,
                   color: 'var(--text-primary)',
-                  maxWidth: 760,
+                  maxWidth: 1000,
                 }}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {content}
