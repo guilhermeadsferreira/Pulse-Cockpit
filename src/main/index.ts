@@ -489,6 +489,18 @@ function sendUpdateStatus(status: typeof lastUpdateStatus): void {
   mainWindow?.webContents.send('update:status', status)
 }
 
+function logUpdaterError(err: Error): void {
+  try {
+    const logsDir = join(app.getPath('userData'), 'logs')
+    mkdirSync(logsDir, { recursive: true })
+    const logFile = join(logsDir, 'updater.log')
+    const line = `[${new Date().toISOString()}] ${app.getVersion()} ERROR: ${err.message}\n`
+    writeFileSync(logFile, line, { flag: 'a' })
+  } catch {
+    // falha silenciosa — não deve impedir o app de funcionar
+  }
+}
+
 function setupAutoUpdater(): void {
   if (!app.isPackaged) return  // só roda em produção
 
@@ -509,6 +521,7 @@ function setupAutoUpdater(): void {
 
   autoUpdater.on('error', (err) => {
     console.error('[AutoUpdater]', err.message)
+    logUpdaterError(err)
     sendUpdateStatus({ phase: 'error', error: err.message })
   })
 
