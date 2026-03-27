@@ -2,7 +2,7 @@ import { basename, join } from 'path'
 import { BrowserWindow } from 'electron'
 import { readFile } from './FileReader'
 import { ArtifactWriter } from './ArtifactWriter'
-import { runClaudePrompt } from './ClaudeRunner'
+import { runClaudePrompt, runOpenRouterPrompt } from './ClaudeRunner'
 import { buildIngestionPrompt, type IngestionAIResult } from '../prompts/ingestion.prompt'
 import { buildCerimoniaSinalPrompt } from '../prompts/cerimonia-sinal.prompt'
 import { validateIngestionResult, validateCerimoniaSinalResult } from './SchemaValidator'
@@ -282,6 +282,9 @@ export class IngestionPipeline {
   ): Promise<void> {
     const teamRegistry = registry.serializeForPrompt()
     const today = new Date().toISOString().slice(0, 10)
+    const settings = SettingsManager.load()
+    const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
+    const openRouterModel = 'google/gemma-3-4b-it:free'
 
     // Processar em batches de MAX_CONCURRENT para evitar spawnar N processos claude simultaneamente
     for (let i = 0; i < slugs.length; i += MAX_CONCURRENT) {
@@ -307,7 +310,17 @@ export class IngestionPipeline {
               today,
             })
 
-            const result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+            let result: import('./ClaudeRunner').ClaudeRunnerResult
+
+            if (hybridActive) {
+              result = await runOpenRouterPrompt(settings.openRouterApiKey!, openRouterModel, prompt, 60_000)
+              if (!result.success) {
+                console.warn(`[IngestionPipeline] OpenRouter fallback para "${slug}": ${result.error}`)
+                result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+              }
+            } else {
+              result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+            }
             if (!result.success || !result.data) {
               console.warn(`[IngestionPipeline] sinal cerimônia falhou para "${slug}": ${result.error ?? 'sem dados'}`)
               return
