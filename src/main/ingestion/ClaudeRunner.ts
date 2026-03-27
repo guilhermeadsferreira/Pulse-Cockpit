@@ -128,6 +128,7 @@ export async function runOpenRouterPrompt(
   model: string,
   prompt: string,
   timeoutMs = 60_000,
+  systemPrompt?: string,
 ): Promise<ClaudeRunnerResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
@@ -147,7 +148,10 @@ export async function runOpenRouterPrompt(
       },
       body: JSON.stringify({
         model,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
         temperature: 0,
       }),
     })
