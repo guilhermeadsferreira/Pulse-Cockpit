@@ -14,6 +14,8 @@ export interface AppSettings {
   openRouterApiKey?: string
   /** Ativar modelo híbrido (OpenRouter para passes elegíveis). Só tem efeito se openRouterApiKey presente. */
   useHybridModel?: boolean
+  /** Modelo OpenRouter a usar. Ex: 'google/gemma-3-4b-it:free', 'thudm/glm-4-9b:free', 'moonshotai/kimi-vl-a3b-thinking:free' */
+  openRouterModel?: string
 }
 
 const SETTINGS_DIR  = join(homedir(), '.pulsecockpit')

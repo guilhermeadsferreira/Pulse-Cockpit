@@ -212,6 +212,19 @@ export function SettingsView() {
               />
             </Field>
             <Field
+              label="Modelo OpenRouter"
+              hint="ID do modelo em openrouter.ai/models — ex: google/gemma-3-4b-it:free, thudm/glm-4-9b:free, moonshotai/kimi-vl-a3b-thinking:free"
+            >
+              <input
+                style={styles.input}
+                type="text"
+                value={form.openRouterModel ?? ''}
+                onChange={(e) => set('openRouterModel', e.target.value || undefined)}
+                placeholder="google/gemma-3-4b-it:free"
+                disabled={!form.openRouterApiKey}
+              />
+            </Field>
+            <Field
               label="Usar modelo híbrido"
               hint={!form.openRouterApiKey ? 'Configure a API Key acima para ativar' : 'Ativo: Pass Cerimônia usará OpenRouter com fallback para Claude CLI'}
             >

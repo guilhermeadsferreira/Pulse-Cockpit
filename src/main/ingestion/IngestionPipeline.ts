@@ -289,7 +289,7 @@ export class IngestionPipeline {
     const today = new Date().toISOString().slice(0, 10)
     const settings = SettingsManager.load()
     const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
-    const openRouterModel = 'google/gemma-3-4b-it:free'
+    const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-4b-it:free'
 
     // Processar em batches de MAX_CONCURRENT para evitar spawnar N processos claude simultaneamente
     for (let i = 0; i < slugs.length; i += MAX_CONCURRENT) {
