@@ -135,7 +135,7 @@ These constraints apply to every plan in this roadmap:
 
 **Goal:** Após a ingestão de um 1:1, gerar um resumo estruturado no estilo Qulture Rocks — com o que foi discutido, compromissos assumidos (por responsável) e próximos passos — e exibi-lo no card do artefato na PersonView com botão de cópia.
 **Requirements:** QR-01
-**Plans:** 1 plan
+**Plans:** 1/1 plans complete
 
 Plans:
 - [ ] 999.1-PLAN.md — Refinamento do prompt resumo_executivo_rh + bloco QR no ArtifactCard
