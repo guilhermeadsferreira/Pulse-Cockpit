@@ -119,11 +119,6 @@ function spawnOnce(
   })
 }
 
-/** ISO timestamp helper for log lines */
-function ts(): string {
-  return new Date().toISOString()
-}
-
 /**
  * Runs a prompt against the OpenRouter API and returns parsed JSON.
  * Falls back to returning a failure result on HTTP or network errors.
