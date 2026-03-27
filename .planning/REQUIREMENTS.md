@@ -22,6 +22,10 @@ Os dados de inteligência já são produzidos pelo pipeline V2. O gap é de supe
 - [ ] **PMPT-01**: Pauta roll-up com o gestor exibe tendências emocionais do time, correlações entre liderados e riscos compostos (múltiplos sinais de risco na mesma pessoa)
 - [ ] **PMPT-02**: Prompt de autoavaliação do gestor consome campos V2: insights de feedback_dado, tendência emocional dos liderados, accountability (ações do gestor com ciclos_sem_mencao elevado)
 
+### Performance — Ingestão
+
+- [ ] **PERF-01**: Gestor consegue ativar o modelo híbrido (OpenRouter para Pass Cerimônia) via Settings e observar redução de latência de ingestão em relação ao baseline do Claude CLI. Critérios de aceitação: (1) campo openRouterApiKey e toggle useHybridModel aparecem na SettingsView e persistem em ~/.pulsecockpit/settings.json; (2) com híbrido ativo, Pass Cerimônia chama OpenRouter em vez de Claude CLI; (3) se OpenRouter falha, há fallback automático para Claude CLI com log de warning visível nos logs do main process.
+
 ## V3 Requirements (deferred)
 
 ### Entidade Projeto
@@ -65,12 +69,13 @@ Os dados de inteligência já são produzidos pelo pipeline V2. O gap é de supe
 | SET-01 | Phase 2 | Pending |
 | PMPT-01 | Phase 3 | Pending |
 | PMPT-02 | Phase 3 | Pending |
+| PERF-01 | Phase 999.3 | Pending |
 
 **Coverage:**
-- V2.1 requirements: 6 total
-- Mapeados para fases: 6
+- V2.1 requirements: 7 total
+- Mapeados para fases: 7
 - Não mapeados: 0 ✓
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after initial definition*
+*Last updated: 2026-03-27 after adding PERF-01 (hybrid model performance)*
