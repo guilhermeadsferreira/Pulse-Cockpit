@@ -7,6 +7,10 @@ export interface ClaudeRunnerResult {
   error?: string
 }
 
+function ts(): string {
+  return new Date().toTimeString().slice(0, 12) // HH:MM:SS.mmm
+}
+
 /**
  * Runs a prompt against the Claude Code CLI and returns parsed JSON.
  * Uses child_process.spawn — never the Anthropic API.
@@ -16,8 +20,9 @@ export function runClaudePrompt(
   prompt: string,
   timeoutMs = 90_000,
   maxRetries = 1,
+  model?: string,
 ): Promise<ClaudeRunnerResult> {
-  return attemptRun(claudeBin, prompt, timeoutMs, 0, maxRetries)
+  return attemptRun(claudeBin, prompt, timeoutMs, 0, maxRetries, model)
 }
 
 async function attemptRun(
@@ -26,8 +31,9 @@ async function attemptRun(
   timeoutMs: number,
   attempt: number,
   maxRetries: number,
+  model?: string,
 ): Promise<ClaudeRunnerResult> {
-  const result = await spawnOnce(claudeBin, prompt, timeoutMs)
+  const result = await spawnOnce(claudeBin, prompt, timeoutMs, model)
 
   if (result.success) return result
 
@@ -35,9 +41,9 @@ async function attemptRun(
     // Exponential backoff with jitter: 2^attempt * 1s ± 50–100%, capped at 30s
     const base = Math.pow(2, attempt) * 1000
     const delay = Math.min(base * (0.5 + Math.random() * 0.5), 30_000)
-    console.log(`[ClaudeRunner] retry ${attempt + 1}/${maxRetries} em ${Math.round(delay)}ms`)
+    console.log(`[ClaudeRunner] ${ts()} retry ${attempt + 1}/${maxRetries} em ${Math.round(delay)}ms`)
     await new Promise((r) => setTimeout(r, delay))
-    return attemptRun(claudeBin, prompt, timeoutMs, attempt + 1, maxRetries)
+    return attemptRun(claudeBin, prompt, timeoutMs, attempt + 1, maxRetries, model)
   }
 
   return result
@@ -47,15 +53,24 @@ function spawnOnce(
   claudeBin: string,
   prompt: string,
   timeoutMs: number,
+  model?: string,
 ): Promise<ClaudeRunnerResult> {
   return new Promise((resolve) => {
     let stdout = ''
     let stderr = ''
     let settled = false
+    const spawnedAt = Date.now()
 
-    console.log(`[ClaudeRunner] spawn: ${claudeBin} -p "<prompt>"`)
+    const args = [
+      '-p', prompt,
+      '--tools', '',               // sem ferramentas — geração de JSON puro
+      '--no-session-persistence',  // não grava sessão em disco
+      ...(model ? ['--model', model] : []),
+    ]
 
-    const proc = spawn(claudeBin, ['-p', prompt], {
+    console.log(`[ClaudeRunner] ${ts()} spawn: ${claudeBin} -p "<prompt>" (${Buffer.byteLength(prompt, 'utf8')} bytes${model ? ` model=${model}` : ''})`)
+
+    const proc = spawn(claudeBin, args, {
       env: { ...process.env },
       stdio: ['ignore', 'pipe', 'pipe'], // fecha stdin explicitamente
     })
@@ -71,11 +86,15 @@ function spawnOnce(
     proc.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
 
     proc.on('close', (code) => {
+      const elapsed = ((Date.now() - spawnedAt) / 1000).toFixed(1)
       clearTimeout(timer)
-      if (settled) return
+      if (settled) {
+        console.log(`[ClaudeRunner] ${ts()} close ignored (already settled): code=${code} elapsed=${elapsed}s`)
+        return
+      }
       settled = true
 
-      console.log(`[ClaudeRunner] close code=${code} stdout=${stdout.length}chars stderr=${stderr.slice(0,100)}`)
+      console.log(`[ClaudeRunner] ${ts()} close code=${code} stdout=${stdout.length}chars elapsed=${elapsed}s stderr=${stderr.slice(0, 100)}`)
 
       if (code !== 0) {
         resolve({
@@ -90,12 +109,78 @@ function spawnOnce(
     })
 
     proc.on('error', (err) => {
+      const elapsed = ((Date.now() - spawnedAt) / 1000).toFixed(1)
       clearTimeout(timer)
       if (settled) return
       settled = true
+      console.error(`[ClaudeRunner] ${ts()} spawn error: ${err.message} elapsed=${elapsed}s`)
       resolve({ success: false, error: err.message })
     })
   })
+}
+
+/**
+ * Runs a prompt against the OpenRouter API and returns parsed JSON.
+ * Falls back to returning a failure result on HTTP or network errors.
+ */
+export async function runOpenRouterPrompt(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  timeoutMs = 15_000,
+  systemPrompt?: string,
+): Promise<ClaudeRunnerResult> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  const startMs = Date.now()
+  const bytes = prompt.length
+
+  console.log(`[OpenRouter] ${ts()} model=${model} (${bytes} bytes)`)
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'pulse-cockpit',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0,
+      }),
+    })
+
+    const elapsed = ((Date.now() - startMs) / 1000).toFixed(2)
+    console.log(`[OpenRouter] ${ts()} status=${response.status} elapsed=${elapsed}s`)
+
+    if (!response.ok) {
+      let errorMessage: string
+      try {
+        const body = await response.json() as { error?: { message?: string } }
+        errorMessage = body.error?.message ?? String(response.status)
+      } catch {
+        errorMessage = String(response.status)
+      }
+      return { success: false, error: `OpenRouter HTTP ${response.status}: ${errorMessage}` }
+    }
+
+    const body = await response.json() as { choices?: Array<{ message?: { content?: string } }> }
+    const content = body.choices?.[0]?.message?.content ?? ''
+    return parseOutput(content)
+  } catch (err: unknown) {
+    const elapsed = ((Date.now() - startMs) / 1000).toFixed(2)
+    const message = err instanceof Error ? err.message : String(err)
+    console.log(`[OpenRouter] ${ts()} error elapsed=${elapsed}s msg=${message}`)
+    return { success: false, error: message }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 function parseOutput(raw: string): ClaudeRunnerResult {

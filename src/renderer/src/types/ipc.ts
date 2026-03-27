@@ -6,6 +6,14 @@ export interface AppSettings {
   claudeBinPath: string
   managerName?: string
   managerRole?: string
+  /** Modelo Claude para passes de ingestão. Padrão: 'sonnet'. Aceita: 'haiku', 'sonnet', 'opus' */
+  ingestionModel?: string
+  /** API key do OpenRouter para modelo híbrido. Armazenada em plaintext (uso pessoal). */
+  openRouterApiKey?: string
+  /** Ativar modelo híbrido (OpenRouter para passes elegíveis). Só tem efeito se openRouterApiKey presente. */
+  useHybridModel?: boolean
+  /** Modelo OpenRouter a usar. Ex: 'google/gemma-3-4b-it:free', 'thudm/glm-4-9b:free', 'moonshotai/kimi-vl-a3b-thinking:free' */
+  openRouterModel?: string
 }
 
 export type PersonLevel   = 'junior' | 'pleno' | 'senior' | 'staff' | 'principal' | 'manager'

@@ -2,10 +2,11 @@ import { basename, join } from 'path'
 import { BrowserWindow } from 'electron'
 import { readFile } from './FileReader'
 import { ArtifactWriter } from './ArtifactWriter'
-import { runClaudePrompt } from './ClaudeRunner'
+import { runClaudePrompt, runOpenRouterPrompt } from './ClaudeRunner'
 import { buildIngestionPrompt, type IngestionAIResult } from '../prompts/ingestion.prompt'
 import { buildCerimoniaSinalPrompt } from '../prompts/cerimonia-sinal.prompt'
-import { validateIngestionResult, validateCerimoniaSinalResult } from './SchemaValidator'
+import { build1on1DeepPrompt, type OneOnOneResult } from '../prompts/1on1-deep.prompt'
+import { validateIngestionResult, validateCerimoniaSinalResult, validateOneOnOneResult } from './SchemaValidator'
 import { PersonRegistry } from '../registry/PersonRegistry'
 import { ActionRegistry } from '../registry/ActionRegistry'
 import { DetectedRegistry } from '../registry/DetectedRegistry'
@@ -39,12 +40,16 @@ export interface QueueItem {
 
 const MAX_CONCURRENT = 3
 const MAX_QUEUE_SIZE  = 100
+const MAX_CONCURRENT_1ON1 = 2
 
 export class IngestionPipeline {
   private queue: QueueItem[] = []
   private processing = false
   // Per-person locks prevent concurrent writes to the same perfil.md
   private personLocks = new Map<string, Promise<void>>()
+  // Semaphore for 1on1 deep passes — limits concurrent Claude spawns under heavy load
+  private active1on1 = 0
+  private pending1on1: Array<() => void> = []
 
   constructor(private workspacePath: string) {}
 
@@ -116,7 +121,7 @@ export class IngestionPipeline {
 
     this.queue.unshift(item)
     this.notifyRenderer('ingestion:started', { filePath, fileName })
-    console.log(`[IngestionPipeline] enqueued: ${fileName}`)
+    console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT enqueued: ${fileName}`)
 
     this.drainQueue()
   }
@@ -282,6 +287,9 @@ export class IngestionPipeline {
   ): Promise<void> {
     const teamRegistry = registry.serializeForPrompt()
     const today = new Date().toISOString().slice(0, 10)
+    const settings = SettingsManager.load()
+    const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
+    const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
 
     // Processar em batches de MAX_CONCURRENT para evitar spawnar N processos claude simultaneamente
     for (let i = 0; i < slugs.length; i += MAX_CONCURRENT) {
@@ -307,7 +315,17 @@ export class IngestionPipeline {
               today,
             })
 
-            const result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+            let result: import('./ClaudeRunner').ClaudeRunnerResult
+
+            if (hybridActive) {
+              result = await runOpenRouterPrompt(settings.openRouterApiKey!, openRouterModel, prompt, 15_000)
+              if (!result.success) {
+                console.warn(`[IngestionPipeline] OpenRouter fallback para "${slug}": ${result.error}`)
+                result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+              }
+            } else {
+              result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+            }
             if (!result.success || !result.data) {
               console.warn(`[IngestionPipeline] sinal cerimônia falhou para "${slug}": ${result.error ?? 'sem dados'}`)
               return
@@ -384,7 +402,20 @@ export class IngestionPipeline {
       today,
     })
 
-    const result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+    const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
+    const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
+
+    let result: import('./ClaudeRunner').ClaudeRunnerResult
+    if (hybridActive) {
+      result = await runOpenRouterPrompt(settings.openRouterApiKey!, openRouterModel, prompt, 15_000)
+      if (!result.success) {
+        console.warn(`[IngestionPipeline] OpenRouter fallback gestor: ${result.error}`)
+        result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+      }
+    } else {
+      result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
+    }
+
     if (!result.success || !result.data) {
       console.warn('[IngestionPipeline] sinal cerimônia gestor: sem dados')
       return
@@ -432,6 +463,173 @@ export class IngestionPipeline {
 
     write2(filePath, content, 'utf-8')
     console.log(`[IngestionPipeline] sinal cerimônia gestor gravado: ${fileName}`)
+  }
+
+  /**
+   * Pass de 1:1 profundo: extrai follow-ups, compromissos, insights, correlações.
+   * Roda após Pass 1/2 quando tipo === '1on1'. Fire-and-forget.
+   * Aplica side effects: atualiza perfil (insights, sinais, tendência, resumo QR),
+   * atualiza status de ações via follow-up, cria novas ações, roteia ações do gestor para Demandas.
+   */
+  private async run1on1DeepPass(
+    slug: string,
+    aiResult: IngestionAIResult,
+    artifactText: string,
+    claudeBinPath: string,
+  ): Promise<OneOnOneResult | null> {
+    const registry = new PersonRegistry(this.workspacePath)
+    const actionReg = new ActionRegistry(this.workspacePath)
+    const pessoa = registry.get(slug)
+    if (!pessoa) return null
+
+    const configYaml = registry.getConfigRaw(slug)
+    const perfilData = registry.getPerfil(slug)
+    const perfilMdRaw = perfilData?.raw ?? null
+    const settings = SettingsManager.load()
+
+    // Serialize open actions by owner
+    const openLiderado = actionReg.getOpenByOwner(slug, 'liderado')
+    const openGestor = actionReg.getOpenByOwner(slug, 'gestor')
+
+    const serializeActions = (actions: import('../../renderer/src/types/ipc').Action[]): string => {
+      if (actions.length === 0) return ''
+      return actions.map((a) =>
+        `- [${a.id}] "${a.descricao || a.texto}" (criada em ${a.criadoEm}${a.prazo ? `, prazo: ${a.prazo}` : ''})`
+      ).join('\n')
+    }
+
+    // Extract sinais de terceiros from profile (Pontos de Atenção with source attribution)
+    const sinaisTerceiros = this.extractProfileSection(perfilMdRaw, 'Sinais de Terceiros')
+      || this.extractProfileSection(perfilMdRaw, 'Pontos de Atenção Ativos')
+      || ''
+
+    // Extract recent health history (last 5 entries)
+    const historicoSaudeRaw = this.extractProfileSection(perfilMdRaw, 'Histórico de Saúde') || ''
+    const historicoSaude = historicoSaudeRaw
+      .split('\n')
+      .filter((l) => l.trim().length > 0)
+      .slice(-5)
+      .join('\n')
+
+    const openActionsLideradoStr = serializeActions(openLiderado)
+    const openActionsGestorStr = serializeActions(openGestor)
+
+    const artifactForDeep = artifactText
+
+    console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT 1on1 prompt breakdown para "${slug}":`,
+      `artifact=${artifactText.length}chars`,
+      `perfil=${(perfilMdRaw ?? '').length}chars`,
+      `config=${configYaml.length}chars`,
+      `acoes=${openActionsLideradoStr.length + openActionsGestorStr.length}chars`,
+      `sinais=${sinaisTerceiros.length}chars`,
+      `historico=${historicoSaude.length}chars`,
+    )
+
+    const prompt = build1on1DeepPrompt({
+      artifactContent: artifactForDeep,
+      perfilMdRaw,
+      configYaml,
+      openActionsLiderado: openActionsLideradoStr,
+      openActionsGestor: openActionsGestorStr,
+      sinaisTerceiros,
+      historicoSaude,
+      today: new Date().toISOString().slice(0, 10),
+      managerName: settings.managerName ?? undefined,
+    })
+
+    const release1on1 = await this.acquire1on1Slot()
+    console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT pass 1on1 para "${slug}" (slot ${this.active1on1}/${MAX_CONCURRENT_1ON1})`)
+    let result: Awaited<ReturnType<typeof runClaudePrompt>>
+    try {
+      result = await runClaudePrompt(claudeBinPath, prompt, 300_000, 1, settings.ingestionModel ?? 'haiku')
+    } finally {
+      release1on1()
+    }
+
+    if (!result.success || !result.data) {
+      console.warn(`[IngestionPipeline] pass 1on1 falhou para "${slug}": ${result.error ?? 'sem dados'}`)
+      return null
+    }
+
+    const validation = validateOneOnOneResult(result.data)
+    if (!validation.valid) {
+      const details = [
+        ...validation.missingFields.map((f) => `campo ausente: ${f}`),
+        ...validation.typeErrors,
+      ].join('; ')
+      console.warn(`[IngestionPipeline] schema inválido no pass 1on1 para "${slug}": ${details}`)
+      return null
+    }
+
+    const oneOnOneResult = result.data as OneOnOneResult
+    const date = aiResult.data_artefato
+    const artifactFileName = `${date}-${slug}.md`
+
+    console.log(
+      `[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT pass 1on1 concluído para "${slug}": ` +
+      `${oneOnOneResult.followup_acoes.length} followups, ` +
+      `${oneOnOneResult.acoes_liderado.length} ações liderado, ` +
+      `${oneOnOneResult.insights_1on1.length} insights`
+    )
+
+    // Apply side effects: update perfil, actions, demandas
+    const release = await this.acquirePersonLock(slug)
+    try {
+      // 1. Update perfil with 1on1 results (insights, sinais, tendencia, resumo QR)
+      const writer = new ArtifactWriter(this.workspacePath)
+      writer.update1on1Results(slug, oneOnOneResult, artifactFileName)
+
+      // 2. Update action statuses from follow-up analysis
+      if (oneOnOneResult.followup_acoes.length > 0) {
+        actionReg.updateFromFollowup(slug, oneOnOneResult.followup_acoes)
+      }
+
+      // 3. Create new actions from 1on1 results
+      if (oneOnOneResult.acoes_liderado.length > 0 || oneOnOneResult.sugestoes_gestor.some((s) => s.gerar_acao)) {
+        actionReg.createFrom1on1Result(slug, oneOnOneResult, date, artifactFileName)
+      }
+
+      // 4. Route acoes_gestor to DemandaRegistry (módulo Eu)
+      if (oneOnOneResult.acoes_gestor.length > 0) {
+        const demandaReg = new DemandaRegistry(this.workspacePath)
+        for (const acao of oneOnOneResult.acoes_gestor) {
+          demandaReg.save({
+            id:           `${date}-1on1-gestor-${Math.random().toString(36).slice(2, 7)}`,
+            descricao:    acao.descricao,
+            origem:       'Liderado',
+            prazo:        acao.prazo_iso ?? null,
+            criadoEm:     date,
+            atualizadoEm: date,
+            status:       'open',
+          })
+        }
+        console.log(`[IngestionPipeline] ${oneOnOneResult.acoes_gestor.length} ação(ões) do gestor → Demandas`)
+      }
+    } finally {
+      release()
+    }
+
+    // Notify renderer about 1on1 deep pass completion
+    this.notifyRenderer('ingestion:1on1-deep-completed', {
+      personSlug: slug,
+      followups: oneOnOneResult.followup_acoes.length,
+      newActions: oneOnOneResult.acoes_liderado.length + oneOnOneResult.acoes_gestor.length,
+      insights: oneOnOneResult.insights_1on1.length,
+      tendencia: oneOnOneResult.tendencia_emocional,
+    })
+
+    return oneOnOneResult
+  }
+
+  /**
+   * Extracts a named section from perfil.md raw content.
+   * Returns the content between ## SectionName and the next ## or end of file.
+   */
+  private extractProfileSection(perfilMdRaw: string | null, sectionName: string): string {
+    if (!perfilMdRaw) return ''
+    const regex = new RegExp(`## ${sectionName}\\n([\\s\\S]*?)(?=\\n## |$)`)
+    const match = perfilMdRaw.match(regex)
+    return match ? match[1].trim() : ''
   }
 
   private async syncItemToPerson(item: QueueItem, slug: string): Promise<void> {
@@ -482,6 +680,133 @@ export class IngestionPipeline {
     })
   }
 
+  /**
+   * Batch re-ingestion: processes a list of files in chronological order.
+   * Used for full workspace re-processing after prompt improvements.
+   *
+   * Flow:
+   * 1. Caller provides sorted file paths (chronological order matters for resumo_evolutivo)
+   * 2. Each file is enqueued and processed sequentially (respects per-person lock)
+   * 3. Progress is reported via renderer events
+   *
+   * Does NOT clean data — caller must handle backup/reset before calling this.
+   */
+  async batchReingest(
+    filePaths: string[],
+    onProgress?: (current: number, total: number, fileName: string) => void,
+  ): Promise<{ processed: number; errors: string[] }> {
+    const errors: string[] = []
+    let processed = 0
+
+    console.log(`[IngestionPipeline] batch reingest: ${filePaths.length} arquivo(s)`)
+
+    for (let i = 0; i < filePaths.length; i++) {
+      const filePath = filePaths[i]
+      const fileName = basename(filePath)
+      onProgress?.(i + 1, filePaths.length, fileName)
+
+      this.notifyRenderer('ingestion:batch-progress', {
+        current: i + 1,
+        total: filePaths.length,
+        fileName,
+      })
+
+      // Create a queue item and process it directly (bypass drainQueue)
+      const item: QueueItem = {
+        id:       `batch-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        filePath,
+        fileName,
+        status:   'queued',
+      }
+
+      try {
+        await this.processItem(item)
+        if (item.status === 'done' || item.status === 'pending') {
+          processed++
+        } else if (item.status === 'error') {
+          errors.push(`${fileName}: ${item.error}`)
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        errors.push(`${fileName}: ${msg}`)
+      }
+
+      // Small delay between items to avoid overwhelming the Claude CLI
+      if (i < filePaths.length - 1) {
+        await new Promise((r) => setTimeout(r, 500))
+      }
+    }
+
+    console.log(`[IngestionPipeline] batch reingest concluído: ${processed}/${filePaths.length} processados, ${errors.length} erro(s)`)
+
+    this.notifyRenderer('ingestion:batch-completed', {
+      processed,
+      total: filePaths.length,
+      errors,
+    })
+
+    return { processed, errors }
+  }
+
+  /**
+   * Resets generated data for all people (perfil.md, actions.yaml, historico/).
+   * Preserves config.yaml. Used before batch re-ingestion.
+   * Returns list of people whose data was reset.
+   */
+  static resetGeneratedData(workspacePath: string): string[] {
+    const pessoasDir = join(workspacePath, 'pessoas')
+    if (!existsSync(pessoasDir)) return []
+
+    const { readdirSync, rmSync } = require('fs') as typeof import('fs')
+    const people = readdirSync(pessoasDir, { withFileTypes: true })
+      .filter((d: { isDirectory: () => boolean }) => d.isDirectory())
+      .map((d: { name: string }) => d.name)
+
+    const resetList: string[] = []
+
+    for (const slug of people) {
+      const personDir = join(pessoasDir, slug)
+
+      // Remove perfil.md (will be regenerated)
+      const perfilPath = join(personDir, 'perfil.md')
+      if (existsSync(perfilPath)) {
+        rmSync(perfilPath)
+      }
+      // Remove perfil.md.bak
+      const bakPath = perfilPath + '.bak'
+      if (existsSync(bakPath)) rmSync(bakPath)
+
+      // Remove actions.yaml (will be regenerated)
+      const actionsPath = join(personDir, 'actions.yaml')
+      if (existsSync(actionsPath)) {
+        rmSync(actionsPath)
+      }
+
+      // Remove historico/ directory (will be regenerated)
+      const historicoDir = join(personDir, 'historico')
+      if (existsSync(historicoDir)) {
+        rmSync(historicoDir, { recursive: true })
+        mkdirSync(historicoDir, { recursive: true })
+      }
+
+      // Remove pautas/ directory (will be regenerated)
+      const pautasDir = join(personDir, 'pautas')
+      if (existsSync(pautasDir)) {
+        rmSync(pautasDir, { recursive: true })
+        mkdirSync(pautasDir, { recursive: true })
+      }
+
+      resetList.push(slug)
+    }
+
+    // Clear pending queue
+    const pendingPath = join(workspacePath, 'inbox', 'pending-queue.json')
+    if (existsSync(pendingPath)) rmSync(pendingPath)
+
+    console.log(`[IngestionPipeline] reset data for ${resetList.length} people: ${resetList.join(', ')}`)
+    return resetList
+  }
+
   private async drainQueue(): Promise<void> {
     if (this.processing) return
     this.processing = true
@@ -496,6 +821,31 @@ export class IngestionPipeline {
     } finally {
       this.processing = false
     }
+  }
+
+  /**
+   * Semaphore for 1on1 deep passes. Allows up to MAX_CONCURRENT_1ON1 simultaneous
+   * passes; excess callers wait until a slot is released.
+   */
+  private acquire1on1Slot(): Promise<() => void> {
+    if (this.active1on1 < MAX_CONCURRENT_1ON1) {
+      this.active1on1++
+      return Promise.resolve(() => {
+        this.active1on1--
+        const next = this.pending1on1.shift()
+        if (next) next()
+      })
+    }
+    return new Promise((resolve) => {
+      this.pending1on1.push(() => {
+        this.active1on1++
+        resolve(() => {
+          this.active1on1--
+          const next = this.pending1on1.shift()
+          if (next) next()
+        })
+      })
+    })
   }
 
   /**
@@ -572,7 +922,7 @@ export class IngestionPipeline {
   private async processItem(item: QueueItem): Promise<void> {
     item.status    = 'processing'
     item.startedAt = Date.now()
-    console.log(`[IngestionPipeline] processing: ${item.fileName}`)
+    console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT processing: ${item.fileName}`)
 
     try {
       const settings         = SettingsManager.load()
@@ -593,6 +943,10 @@ export class IngestionPipeline {
 
       const managerName = settings.managerName ?? undefined
 
+      const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
+      const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
+      const PASS1_SYSTEM_PROMPT = 'You must respond with valid JSON only. Do not include markdown code blocks, explanations, or any text outside the JSON object.'
+
       // Pass 1: identify pessoa_principal (no perfil context yet)
       const promptPass1 = buildIngestionPrompt({
         teamRegistry,
@@ -601,14 +955,42 @@ export class IngestionPipeline {
         today,
         managerName,
       })
-      const resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
+
+      let resultPass1: import('./ClaudeRunner').ClaudeRunnerResult
+
+      if (hybridActive) {
+        resultPass1 = await runOpenRouterPrompt(
+          settings.openRouterApiKey!,
+          openRouterModel,
+          promptPass1,
+          15_000,
+          PASS1_SYSTEM_PROMPT,
+        )
+        if (resultPass1.success && resultPass1.data) {
+          const schemaCheck = validateIngestionResult(resultPass1.data)
+          if (!schemaCheck.valid) {
+            const details = [
+              ...schemaCheck.missingFields.map((f) => `campo ausente: ${f}`),
+              ...schemaCheck.typeErrors,
+            ].join('; ')
+            console.warn(`[IngestionPipeline] OpenRouter Pass 1 schema inválido, fallback para Claude CLI: ${details}`)
+            resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
+          }
+        } else {
+          console.warn(`[IngestionPipeline] OpenRouter Pass 1 falhou, fallback para Claude CLI: ${resultPass1.error}`)
+          resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
+        }
+      } else {
+        resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
+      }
+
       if (!resultPass1.success || !resultPass1.data) {
         throw new Error(resultPass1.error || 'Claude não retornou dados válidos')
       }
 
       const validation1 = validateIngestionResult(resultPass1.data)
       if (!validation1.valid) {
-        const details = [...validation1.missingFields.map(f => `campo ausente: ${f}`), ...validation1.typeErrors].join('; ')
+        const details = [...validation1.missingFields.map((f) => `campo ausente: ${f}`), ...validation1.typeErrors].join('; ')
         throw new Error(`Schema inválido na saída do Claude (pass 1): ${details}`)
       }
 
@@ -691,8 +1073,18 @@ export class IngestionPipeline {
 
       // If pessoa_principal is registered → sync immediately
       if (principal && registry.get(principal)) {
+        // Capture before sync (sync clears cached data)
+        const capturedAiResult = aiResult
+        const capturedText = text
+
         await this.syncItemToPerson(item, principal)
-        console.log(`[IngestionPipeline] done: ${item.fileName} → ${principal}`)
+        console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT done: ${item.fileName} → ${principal}`)
+
+        // Pass 1on1: deep analysis for 1:1 artifacts (fire-and-forget)
+        if (capturedAiResult.tipo === '1on1' && settings.claudeBinPath) {
+          this.run1on1DeepPass(principal, capturedAiResult, capturedText, settings.claudeBinPath)
+            .catch((err) => console.warn('[IngestionPipeline] pass 1on1 falhou:', err))
+        }
       } else if (!principal) {
         // Reunião coletiva: sem pessoa_principal → salva em _coletivo + sinais por pessoa (async)
         this.syncItemToCollective(item, settings.claudeBinPath)

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { FolderOpen, Cpu, CheckCircle2, XCircle, User } from 'lucide-react'
+import { FolderOpen, Cpu, CheckCircle2, XCircle, User, RefreshCw, Zap } from 'lucide-react'
 import type { AppSettings } from '../types/ipc'
 
 export function SettingsView() {
@@ -7,6 +7,9 @@ export function SettingsView() {
   const [saved, setSaved] = useState(false)
   const [claudeStatus, setClaudeStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
   const [claudeError, setClaudeError] = useState<string | null>(null)
+  const [reingestStatus, setReingestStatus] = useState<'idle' | 'loading' | 'confirming' | 'running' | 'done' | 'error'>('idle')
+  const [reingestInfo, setReingestInfo] = useState<{ count: number; files: string[] } | null>(null)
+  const [reingestResult, setReingestResult] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.settings.load().then(setForm)
@@ -34,6 +37,29 @@ export function SettingsView() {
   async function handleDetectClaude() {
     const bin = await window.api.settings.detectClaude()
     if (bin) set('claudeBinPath', bin)
+  }
+
+  async function handleReingestPreview() {
+    setReingestStatus('loading')
+    setReingestResult(null)
+    const files: string[] = await window.api.ingestion.listProcessados()
+    setReingestInfo({ count: files.length, files })
+    setReingestStatus('confirming')
+  }
+
+  async function handleReingestConfirm() {
+    if (!reingestInfo) return
+    setReingestStatus('running')
+    await window.api.ingestion.resetData()
+    const result = await window.api.ingestion.batchReingest(reingestInfo.files) as { processed: number; errors: string[] }
+    setReingestResult(`${result.processed} arquivo(s) reingeridos${result.errors.length ? ` — ${result.errors.length} erro(s)` : ''}`)
+    setReingestStatus('done')
+  }
+
+  function handleReingestCancel() {
+    setReingestStatus('idle')
+    setReingestInfo(null)
+    setReingestResult(null)
   }
 
   async function handleTestClaude() {
@@ -112,6 +138,107 @@ export function SettingsView() {
                   <FolderOpen size={12} /> Selecionar
                 </button>
               </div>
+            </Field>
+          </Section>
+
+          {/* Dados */}
+          <Section
+            icon={<RefreshCw size={14} />}
+            title="Dados"
+            desc="Reingestão de artefatos já processados — use se os perfis estiverem desatualizados"
+          >
+            <Field label="Reingerir todos os artefatos" hint="Apaga os dados gerados (perfis, insights) e processa novamente todos os arquivos da pasta processados/">
+              {reingestStatus === 'idle' && (
+                <button onClick={handleReingestPreview} style={styles.btnSecondary}>
+                  <RefreshCw size={12} /> Verificar arquivos
+                </button>
+              )}
+              {reingestStatus === 'loading' && (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Listando arquivos…</span>
+              )}
+              {reingestStatus === 'confirming' && reingestInfo && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {reingestInfo.count} arquivo(s) encontrado(s) em <code style={{ fontFamily: 'var(--font-mono)' }}>processados/</code>. Isso vai apagar os dados gerados e reingerir tudo.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={handleReingestConfirm} style={{ ...styles.btnSecondary, color: 'var(--red)', borderColor: 'var(--red)' }}>
+                      Confirmar reingestão
+                    </button>
+                    <button onClick={handleReingestCancel} style={styles.btnSecondary}>
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              )}
+              {reingestStatus === 'running' && (
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Reingerindo… aguarde</span>
+              )}
+              {reingestStatus === 'done' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <StatusLine ok>{reingestResult}</StatusLine>
+                  <button onClick={handleReingestCancel} style={{ ...styles.btnSecondary, alignSelf: 'flex-start' }}>
+                    Reiniciar
+                  </button>
+                </div>
+              )}
+              {reingestStatus === 'error' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <StatusLine ok={false}>{reingestResult ?? 'Erro ao reingerir'}</StatusLine>
+                  <button onClick={handleReingestCancel} style={{ ...styles.btnSecondary, alignSelf: 'flex-start' }}>
+                    Tentar novamente
+                  </button>
+                </div>
+              )}
+            </Field>
+          </Section>
+
+          {/* Modelo Híbrido */}
+          <Section
+            icon={<Zap size={14} />}
+            title="Modelo Híbrido (OpenRouter)"
+            desc="Usa modelos leves via OpenRouter para passes de baixa complexidade — reduz latência de ingestão"
+          >
+            <Field
+              label="OpenRouter API Key"
+              hint="Cole sua key de api.openrouter.ai/keys — armazenada localmente em ~/.pulsecockpit/settings.json"
+            >
+              <input
+                style={styles.input}
+                type="password"
+                value={form.openRouterApiKey ?? ''}
+                onChange={(e) => set('openRouterApiKey', e.target.value || undefined)}
+                placeholder="sk-or-v1-..."
+              />
+            </Field>
+            <Field
+              label="Modelo OpenRouter"
+              hint="ID do modelo em openrouter.ai/models — ex: google/gemma-3-27b-it, google/gemini-flash-1.5-8b, meta-llama/llama-3.1-8b-instruct"
+            >
+              <input
+                style={styles.input}
+                type="text"
+                value={form.openRouterModel ?? ''}
+                onChange={(e) => set('openRouterModel', e.target.value || undefined)}
+                placeholder="google/gemma-3-27b-it"
+                disabled={!form.openRouterApiKey}
+              />
+            </Field>
+            <Field
+              label="Usar modelo híbrido"
+              hint={!form.openRouterApiKey ? 'Configure a API Key acima para ativar' : 'Ativo: Pass Cerimônia usará OpenRouter com fallback para Claude CLI'}
+            >
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: form.openRouterApiKey ? 'pointer' : 'default' }}>
+                <input
+                  type="checkbox"
+                  checked={form.useHybridModel ?? false}
+                  disabled={!form.openRouterApiKey}
+                  onChange={(e) => set('useHybridModel', e.target.checked)}
+                />
+                <span style={{ fontSize: 12, color: form.openRouterApiKey ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                  Ativar modelo híbrido
+                </span>
+              </label>
             </Field>
           </Section>
 

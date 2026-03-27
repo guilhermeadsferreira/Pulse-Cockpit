@@ -1,10 +1,10 @@
 {
   "name": "pulse-cockpit",
-  "version": "0.1.11",
+  "version": "0.2.0",
   "description": "Segundo cérebro para gestores de tecnologia",
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite build &&electron-vite dev",
+    "dev": "electron-vite build && electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite build && electron-vite preview",
     "package": "npm run build && electron-builder",
