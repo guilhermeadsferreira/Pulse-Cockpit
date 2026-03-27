@@ -213,14 +213,14 @@ export function SettingsView() {
             </Field>
             <Field
               label="Modelo OpenRouter"
-              hint="ID do modelo em openrouter.ai/models — ex: google/gemma-3-4b-it:free, thudm/glm-4-9b:free, moonshotai/kimi-vl-a3b-thinking:free"
+              hint="ID do modelo em openrouter.ai/models — ex: google/gemma-3-27b-it, google/gemini-flash-1.5-8b, meta-llama/llama-3.1-8b-instruct"
             >
               <input
                 style={styles.input}
                 type="text"
                 value={form.openRouterModel ?? ''}
                 onChange={(e) => set('openRouterModel', e.target.value || undefined)}
-                placeholder="google/gemma-3-4b-it:free"
+                placeholder="google/gemma-3-27b-it"
                 disabled={!form.openRouterApiKey}
               />
             </Field>
