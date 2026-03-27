@@ -133,12 +133,12 @@ These constraints apply to every plan in this roadmap:
 
 ### Phase 999.1: Resumo de 1:1 no estilo Qulture Rocks (BACKLOG)
 
-**Goal:** Após a ingestão de um 1:1, gerar um resumo estruturado no estilo Qulture Rocks — com o que foi discutido, compromissos assumidos e próximos passos — em três versões: para o gestor, para o liderado e para RH.
-**Requirements:** TBD
-**Plans:** 0 plans
+**Goal:** Após a ingestão de um 1:1, gerar um resumo estruturado no estilo Qulture Rocks — com o que foi discutido, compromissos assumidos (por responsável) e próximos passos — e exibi-lo no card do artefato na PersonView com botão de cópia.
+**Requirements:** QR-01
+**Plans:** 1 plan
 
 Plans:
-- [ ] TBD (promote with /gsd:review-backlog when ready)
+- [ ] 999.1-PLAN.md — Refinamento do prompt resumo_executivo_rh + bloco QR no ArtifactCard
 
 ### Phase 999.2: Módulo Mentor AI (BACKLOG)
 
