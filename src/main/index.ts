@@ -9,7 +9,7 @@ import { ActionRegistry } from './registry/ActionRegistry'
 import { DemandaRegistry } from './registry/DemandaRegistry'
 import { CicloRegistry } from './registry/CicloRegistry'
 import { setupWorkspace } from './workspace/WorkspaceSetup'
-import { runClaudePrompt } from './ingestion/ClaudeRunner'
+import { runClaudePrompt, runWithProvider } from './ingestion/ClaudeRunner'
 import { readFile } from './ingestion/FileReader'
 import { FileWatcher } from './ingestion/FileWatcher'
 import { buildAgendaPrompt, renderAgendaMarkdown, type AgendaAIResult } from './prompts/agenda.prompt'
@@ -94,13 +94,11 @@ function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('people:save', async (_event, config) => {
-    const isNew = !getRegistry().get(config.slug)
     getRegistry().save(config)
-    // If this is a newly registered person, sync any pending inbox items
-    if (isNew && fileWatcher) {
+    // Always try to sync pending inbox items (person may have been registered after processing)
+    if (fileWatcher) {
       const count = await fileWatcher.reprocessPending(config.slug)
       if (count > 0) console.log(`[people:save] synced ${count} pending item(s) for "${config.slug}"`)
-
     }
   })
 
@@ -239,7 +237,10 @@ function registerIpcHandlers(): void {
         pautasAnteriores,
         openActions,
       })
-      const result = await runClaudePrompt(settings.claudeBinPath, prompt, 90_000)
+      const result = await runWithProvider('agendaGeneration', settings, prompt, {
+        claudeBinPath: settings.claudeBinPath,
+        claudeTimeoutMs: 90_000,
+      })
       if (!result.success || !result.data) {
         return { success: false, error: result.error || 'Falha ao gerar pauta.' }
       }
@@ -281,7 +282,10 @@ function registerIpcHandlers(): void {
       const pdiEstruturado = pdiMatch?.[1]?.trim() || ''
 
       const prompt = buildAgendaPrompt({ configYaml: configRaw, perfilMd: perfilData.raw, today, dadosStale, pautasAnteriores, openActions: enrichedActions, insightsRecentes, sinaisTerceiros, pdiEstruturado })
-      const result = await runClaudePrompt(settings.claudeBinPath, prompt, 90_000)
+      const result = await runWithProvider('agendaGeneration', settings, prompt, {
+        claudeBinPath: settings.claudeBinPath,
+        claudeTimeoutMs: 90_000,
+      })
       if (!result.success || !result.data) {
         return { success: false, error: result.error || 'Falha ao gerar pauta.' }
       }
@@ -347,7 +351,10 @@ function registerIpcHandlers(): void {
       console.warn(`[ai:cycle-report] contexto limitado: ${totalArtifacts - truncatedArtifacts}/${totalArtifacts} artefatos incluídos para "${personSlug}"`)
     }
 
-    const result = await runClaudePrompt(settings.claudeBinPath, prompt, 120_000)
+    const result = await runWithProvider('cycleReport', settings, prompt, {
+      claudeBinPath: settings.claudeBinPath,
+      claudeTimeoutMs: 120_000,
+    })
     if (!result.success || !result.data) {
       return { success: false, error: result.error || 'Falha ao gerar relatório de ciclo.' }
     }
@@ -378,6 +385,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle('actions:update-status', (_event, slug: string, id: string, status: string) => {
     const { workspacePath } = SettingsManager.load()
     new ActionRegistry(workspacePath).updateStatus(slug, id, status as 'open' | 'done' | 'cancelled')
+  })
+
+  ipcMain.handle('actions:delete', (_event, slug: string, id: string) => {
+    const { workspacePath } = SettingsManager.load()
+    new ActionRegistry(workspacePath).delete(slug, id)
   })
 
   // ── Demandas (Módulo Eu) ──────────────────────────────────
@@ -437,7 +449,10 @@ function registerIpcHandlers(): void {
         artifactContent: text,
         today,
       })
-      const result = await runClaudePrompt(settings.claudeBinPath, prompt, 90_000)
+      const result = await runWithProvider('autoAvaliacao', settings, prompt, {
+        claudeBinPath: settings.claudeBinPath,
+        claudeTimeoutMs: 90_000,
+      })
       if (!result.success || !result.data) {
         return { success: false, error: result.error || 'Falha na ingestão do artefato.' }
       }
@@ -487,7 +502,10 @@ function registerIpcHandlers(): void {
         periodoInicio,
         periodoFim,
       })
-      const result = await runClaudePrompt(settings.claudeBinPath, prompt, 120_000)
+      const result = await runWithProvider('autoAvaliacao', settings, prompt, {
+        claudeBinPath: settings.claudeBinPath,
+        claudeTimeoutMs: 120_000,
+      })
       if (!result.success || !result.data) {
         return { success: false, error: result.error || 'Falha ao gerar autoavaliação.' }
       }
@@ -617,6 +635,7 @@ app.whenReady().then(async () => {
   fileWatcher = new FileWatcher(settings.workspacePath)
   fileWatcher.start()
   fileWatcher.restorePending() // restore items pending from previous session
+  fileWatcher.syncAllPending() // sync pending items whose persons are now registered
 
   setupAutoUpdater()
 

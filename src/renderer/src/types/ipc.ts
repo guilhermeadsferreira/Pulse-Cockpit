@@ -1,19 +1,47 @@
 // Shared types between main process and renderer.
 // Keep this file free of Node.js-only imports.
 
+export type LLMProvider = 'claude-cli' | 'openrouter'
+
+export type IngestionOperation =
+  | 'ingestionPass1'
+  | 'ingestionPass2'
+  | 'ceremonySinals'
+  | 'ingestionDeep1on1'
+  | 'profileCompression'
+  | 'agendaGeneration'
+  | 'cycleReport'
+  | 'autoAvaliacao'
+
+export interface OperationProviderConfig {
+  provider: LLMProvider
+  /** Model ID — ex: 'haiku', 'sonnet' para claude-cli; 'google/gemma-3-27b-it' para openrouter */
+  model?: string
+  /** Se true, faz fallback para claude-cli em caso de falha. Só se aplica quando provider='openrouter'. */
+  fallbackToClaude?: boolean
+}
+
 export interface AppSettings {
   workspacePath: string
   claudeBinPath: string
   managerName?: string
   managerRole?: string
-  /** Modelo Claude para passes de ingestão. Padrão: 'sonnet'. Aceita: 'haiku', 'sonnet', 'opus' */
+  /** Modelo Claude para o Deep 1:1. Padrão: 'haiku'. Aceita: 'haiku', 'sonnet', 'opus' */
   ingestionModel?: string
-  /** API key do OpenRouter para modelo híbrido. Armazenada em plaintext (uso pessoal). */
+  /** API key do OpenRouter. Armazenada em plaintext (uso pessoal). */
   openRouterApiKey?: string
-  /** Ativar modelo híbrido (OpenRouter para passes elegíveis). Só tem efeito se openRouterApiKey presente. */
+  /** @deprecated Use defaultProvider='openrouter' em vez de useHybridModel */
   useHybridModel?: boolean
-  /** Modelo OpenRouter a usar. Ex: 'google/gemma-3-4b-it:free', 'thudm/glm-4-9b:free', 'moonshotai/kimi-vl-a3b-thinking:free' */
+  /** Modelo OpenRouter padrão. Ex: 'google/gemma-3-27b-it' */
   openRouterModel?: string
+  /** API key do Google AI (Gemini) para pré-processamento de transcrições. Armazenada em plaintext. */
+  googleAiApiKey?: string
+  /** Ativar pré-processamento Gemini (limpa transcrições antes de enviar ao modelo). Só tem efeito se googleAiApiKey presente. */
+  useGeminiPreprocessing?: boolean
+  /** Provider padrão global. Todas as operações sem override usam este. */
+  defaultProvider?: LLMProvider
+  /** Override de provider por operação. Operações sem override herdam defaultProvider. */
+  providers?: Partial<Record<IngestionOperation, OperationProviderConfig>>
 }
 
 export type PersonLevel   = 'junior' | 'pleno' | 'senior' | 'staff' | 'principal' | 'manager'
@@ -209,8 +237,9 @@ export type DemandaOrigem = 'Líder' | 'Liderado' | 'Par' | 'Eu'
 export interface Demanda {
   id:              string
   descricao:       string
-  descricaoLonga?: string | null  // descrição detalhada opcional
+  descricaoLonga?: string | null  // contexto: de onde veio (ex: "1:1 com Luis Fin", "Daily Conta Digital")
   origem:          DemandaOrigem
+  pessoaSlug?:     string | null  // slug da pessoa relacionada (para linkar ao perfil)
   prazo?:          string | null  // YYYY-MM-DD
   criadoEm:        string         // YYYY-MM-DD
   atualizadoEm:    string         // YYYY-MM-DD

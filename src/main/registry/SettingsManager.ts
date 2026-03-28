@@ -3,19 +3,45 @@ import { join } from 'path'
 import { homedir } from 'os'
 import { execSync } from 'child_process'
 
+export type LLMProvider = 'claude-cli' | 'openrouter'
+
+export type IngestionOperation =
+  | 'ingestionPass1'
+  | 'ingestionPass2'
+  | 'ceremonySinals'
+  | 'ingestionDeep1on1'
+  | 'profileCompression'
+  | 'agendaGeneration'
+  | 'cycleReport'
+  | 'autoAvaliacao'
+
+export interface OperationProviderConfig {
+  provider: LLMProvider
+  model?: string
+  fallbackToClaude?: boolean
+}
+
 export interface AppSettings {
   workspacePath: string
   claudeBinPath: string
   managerName?: string
   managerRole?: string
-  /** Modelo Claude para passes de ingestão. Padrão: 'sonnet'. Aceita: 'haiku', 'sonnet', 'opus' */
+  /** Modelo Claude para o Deep 1:1. Padrão: 'haiku'. Aceita: 'haiku', 'sonnet', 'opus' */
   ingestionModel?: string
-  /** API key do OpenRouter para modelo híbrido. Armazenada em plaintext (uso pessoal). */
+  /** API key do OpenRouter. Armazenada em plaintext (uso pessoal). */
   openRouterApiKey?: string
-  /** Ativar modelo híbrido (OpenRouter para passes elegíveis). Só tem efeito se openRouterApiKey presente. */
+  /** @deprecated Use defaultProvider='openrouter' em vez de useHybridModel */
   useHybridModel?: boolean
-  /** Modelo OpenRouter a usar. Ex: 'google/gemma-3-4b-it:free', 'thudm/glm-4-9b:free', 'moonshotai/kimi-vl-a3b-thinking:free' */
+  /** Modelo OpenRouter padrão. Ex: 'google/gemma-3-27b-it' */
   openRouterModel?: string
+  /** API key do Google AI (Gemini) para pré-processamento de transcrições. Armazenada em plaintext. */
+  googleAiApiKey?: string
+  /** Ativar pré-processamento Gemini (limpa transcrições antes de enviar ao modelo). Só tem efeito se googleAiApiKey presente. */
+  useGeminiPreprocessing?: boolean
+  /** Provider padrão global. Todas as operações sem override usam este. */
+  defaultProvider?: LLMProvider
+  /** Override de provider por operação. Operações sem override herdam defaultProvider. */
+  providers?: Partial<Record<IngestionOperation, OperationProviderConfig>>
 }
 
 const SETTINGS_DIR  = join(homedir(), '.pulsecockpit')

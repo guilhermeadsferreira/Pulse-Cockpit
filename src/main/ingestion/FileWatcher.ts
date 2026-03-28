@@ -66,6 +66,11 @@ export class FileWatcher {
     this.pipeline.restorePending()
   }
 
+  // Sync all pending items whose persons are now registered
+  syncAllPending(): Promise<number> {
+    return this.pipeline.syncAllPending()
+  }
+
   // Batch re-ingestion: process files in chronological order
   batchReingest(filePaths: string[]): Promise<{ processed: number; errors: string[] }> {
     return this.pipeline.batchReingest(filePaths)

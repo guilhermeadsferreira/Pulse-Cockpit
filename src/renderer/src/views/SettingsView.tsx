@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { FolderOpen, Cpu, CheckCircle2, XCircle, User, RefreshCw, Zap } from 'lucide-react'
-import type { AppSettings } from '../types/ipc'
+import { FolderOpen, Cpu, CheckCircle2, XCircle, User, RefreshCw, Zap, Sparkles, ChevronDown, ChevronRight } from 'lucide-react'
+import type { AppSettings, IngestionOperation, OperationProviderConfig } from '../types/ipc'
 
 export function SettingsView() {
   const [form, setForm] = useState<AppSettings | null>(null)
@@ -10,6 +10,7 @@ export function SettingsView() {
   const [reingestStatus, setReingestStatus] = useState<'idle' | 'loading' | 'confirming' | 'running' | 'done' | 'error'>('idle')
   const [reingestInfo, setReingestInfo] = useState<{ count: number; files: string[] } | null>(null)
   const [reingestResult, setReingestResult] = useState<string | null>(null)
+  const [showProviderOverrides, setShowProviderOverrides] = useState(false)
 
   useEffect(() => {
     window.api.settings.load().then(setForm)
@@ -17,6 +18,24 @@ export function SettingsView() {
 
   function set(field: keyof AppSettings, value: unknown) {
     setForm((f) => f ? ({ ...f, [field]: value }) : f)
+    setSaved(false)
+  }
+
+  function setOperationProvider(op: IngestionOperation, patch: Partial<OperationProviderConfig>) {
+    setForm((f) => {
+      if (!f) return f
+      const existing = f.providers?.[op] ?? {}
+      return { ...f, providers: { ...f.providers, [op]: { ...existing, ...patch } } }
+    })
+    setSaved(false)
+  }
+
+  function clearOperationProvider(op: IngestionOperation) {
+    setForm((f) => {
+      if (!f) return f
+      const { [op]: _removed, ...rest } = f.providers ?? {}
+      return { ...f, providers: Object.keys(rest).length ? rest : undefined }
+    })
     setSaved(false)
   }
 
@@ -193,12 +212,61 @@ export function SettingsView() {
             </Field>
           </Section>
 
-          {/* Modelo Híbrido */}
+          {/* Pré-processamento Gemini */}
+          <Section
+            icon={<Sparkles size={14} />}
+            title="Pré-processamento Gemini"
+            desc="Limpa transcrições antes de enviar ao Claude — reduz consumo de tokens em ~60%"
+          >
+            <Field
+              label="Google AI API Key"
+              hint={<>Obtenha em <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener" style={{ color: 'var(--accent)' }}>aistudio.google.com/app/apikey</a> — armazenada localmente</>}
+            >
+              <input
+                style={styles.input}
+                type="password"
+                value={form.googleAiApiKey ?? ''}
+                onChange={(e) => set('googleAiApiKey', e.target.value || undefined)}
+                placeholder="AIza..."
+              />
+            </Field>
+            <Field
+              label="Ativar pré-processamento"
+              hint={!form.googleAiApiKey ? 'Configure a API Key acima para ativar' : 'Remove ruído, preenchedores e estrutura o conteúdo antes da análise pelo Claude'}
+            >
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: form.googleAiApiKey ? 'pointer' : 'default' }}>
+                <input
+                  type="checkbox"
+                  checked={form.useGeminiPreprocessing ?? false}
+                  disabled={!form.googleAiApiKey}
+                  onChange={(e) => set('useGeminiPreprocessing', e.target.checked)}
+                />
+                <span style={{ fontSize: 12, color: form.googleAiApiKey ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                  Usar Gemini Flash para pré-processar transcrições
+                </span>
+              </label>
+            </Field>
+          </Section>
+
+          {/* Providers */}
           <Section
             icon={<Zap size={14} />}
-            title="Modelo Híbrido (OpenRouter)"
-            desc="Usa modelos leves via OpenRouter para passes de baixa complexidade — reduz latência de ingestão"
+            title="Providers de IA"
+            desc="Configure qual provider usar globalmente e por operação — suporta Claude CLI e OpenRouter"
           >
+            <Field
+              label="Provider padrão"
+              hint="Usado em todas as operações que não têm override configurado abaixo"
+            >
+              <select
+                style={{ ...styles.input, cursor: 'pointer' }}
+                value={form.defaultProvider ?? 'claude-cli'}
+                onChange={(e) => set('defaultProvider', e.target.value as 'claude-cli' | 'openrouter')}
+              >
+                <option value="claude-cli">Claude Code CLI</option>
+                <option value="openrouter" disabled={!form.openRouterApiKey}>OpenRouter{!form.openRouterApiKey ? ' (sem API key)' : ''}</option>
+              </select>
+            </Field>
             <Field
               label="OpenRouter API Key"
               hint="Cole sua key de api.openrouter.ai/keys — armazenada localmente em ~/.pulsecockpit/settings.json"
@@ -212,8 +280,8 @@ export function SettingsView() {
               />
             </Field>
             <Field
-              label="Modelo OpenRouter"
-              hint="ID do modelo em openrouter.ai/models — ex: google/gemma-3-27b-it, google/gemini-flash-1.5-8b, meta-llama/llama-3.1-8b-instruct"
+              label="Modelo OpenRouter padrão"
+              hint="Usado quando o provider é OpenRouter e nenhum override de modelo está configurado"
             >
               <input
                 style={styles.input}
@@ -224,22 +292,32 @@ export function SettingsView() {
                 disabled={!form.openRouterApiKey}
               />
             </Field>
-            <Field
-              label="Usar modelo híbrido"
-              hint={!form.openRouterApiKey ? 'Configure a API Key acima para ativar' : 'Ativo: Pass Cerimônia usará OpenRouter com fallback para Claude CLI'}
-            >
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: form.openRouterApiKey ? 'pointer' : 'default' }}>
-                <input
-                  type="checkbox"
-                  checked={form.useHybridModel ?? false}
-                  disabled={!form.openRouterApiKey}
-                  onChange={(e) => set('useHybridModel', e.target.checked)}
-                />
-                <span style={{ fontSize: 12, color: form.openRouterApiKey ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                  Ativar modelo híbrido
-                </span>
-              </label>
-            </Field>
+
+            {/* Overrides por operação */}
+            <div>
+              <button
+                onClick={() => setShowProviderOverrides((v) => !v)}
+                style={{ ...styles.btnSecondary, width: '100%', justifyContent: 'space-between' }}
+              >
+                <span>Overrides por operação</span>
+                {showProviderOverrides ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              </button>
+
+              {showProviderOverrides && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    "padrão" herda o provider global acima. Overrides permitem testar modelos diferentes por operação.
+                  </div>
+                  <ProviderOverridesTable
+                    providers={form.providers}
+                    hasOpenRouterKey={!!form.openRouterApiKey}
+                    defaultOpenRouterModel={form.openRouterModel ?? 'google/gemma-3-27b-it'}
+                    onSet={setOperationProvider}
+                    onClear={clearOperationProvider}
+                  />
+                </div>
+              )}
+            </div>
           </Section>
 
           {/* Claude CLI */}
@@ -285,6 +363,83 @@ export function SettingsView() {
   )
 }
 
+const OPERATION_LABELS: Record<IngestionOperation, string> = {
+  ingestionPass1:    'Ingestão Pass 1 (identificação)',
+  ingestionPass2:    'Ingestão Pass 2 (enriquecimento)',
+  ceremonySinals:    'Sinais de Cerimônia',
+  ingestionDeep1on1: 'Deep 1:1',
+  profileCompression:'Compressão de Perfil',
+  agendaGeneration:  'Geração de Pauta',
+  cycleReport:       'Relatório de Ciclo',
+  autoAvaliacao:     'Auto-avaliação / Ciclo Gestor',
+}
+
+const ALL_OPERATIONS = Object.keys(OPERATION_LABELS) as IngestionOperation[]
+
+function ProviderOverridesTable({
+  providers, hasOpenRouterKey, defaultOpenRouterModel, onSet, onClear,
+}: {
+  providers: AppSettings['providers']
+  hasOpenRouterKey: boolean
+  defaultOpenRouterModel: string
+  onSet: (op: IngestionOperation, patch: Partial<OperationProviderConfig>) => void
+  onClear: (op: IngestionOperation) => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid var(--border)', borderRadius: 6, overflow: 'hidden' }}>
+      {ALL_OPERATIONS.map((op, i) => {
+        const override = providers?.[op]
+        const isLast = i === ALL_OPERATIONS.length - 1
+        return (
+          <div key={op} style={{
+            display: 'grid', gridTemplateColumns: '1fr auto auto',
+            gap: 8, alignItems: 'center',
+            padding: '8px 12px',
+            borderBottom: isLast ? 'none' : '1px solid var(--border-subtle)',
+            background: override ? 'var(--surface-2)' : 'transparent',
+          }}>
+            <div style={{ fontSize: 12, color: override ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+              {OPERATION_LABELS[op]}
+            </div>
+            <select
+              style={{
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                borderRadius: 4, padding: '4px 8px', fontSize: 11,
+                color: 'var(--text-primary)', cursor: 'pointer',
+                fontFamily: 'var(--font)',
+              }}
+              value={override?.provider ?? ''}
+              onChange={(e) => {
+                const val = e.target.value
+                if (!val) { onClear(op); return }
+                onSet(op, { provider: val as 'claude-cli' | 'openrouter', model: undefined, fallbackToClaude: val === 'openrouter' })
+              }}
+            >
+              <option value="">padrão</option>
+              <option value="claude-cli">Claude CLI</option>
+              <option value="openrouter" disabled={!hasOpenRouterKey}>OpenRouter{!hasOpenRouterKey ? ' (sem key)' : ''}</option>
+            </select>
+            {override && (
+              <input
+                style={{
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  borderRadius: 4, padding: '4px 8px', fontSize: 11,
+                  color: 'var(--text-primary)', width: 180,
+                  fontFamily: 'var(--font-mono)',
+                }}
+                value={override.model ?? ''}
+                onChange={(e) => onSet(op, { model: e.target.value || undefined })}
+                placeholder={override.provider === 'openrouter' ? defaultOpenRouterModel : 'haiku / sonnet / opus'}
+              />
+            )}
+            {!override && <div />}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function Section({ icon, title, desc, children }: {
   icon: React.ReactNode; title: string; desc: string; children: React.ReactNode
 }) {
@@ -307,7 +462,7 @@ function Section({ icon, title, desc, children }: {
   )
 }
 
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', marginBottom: hint ? 2 : 6 }}>{label}</div>

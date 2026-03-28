@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowLeft, FileText, CalendarDays, Pencil, ExternalLink, RefreshCw, Loader2, CheckSquare, Square, X, Plus, ArrowUpRight } from 'lucide-react'
+import { ArrowLeft, FileText, CalendarDays, Pencil, ExternalLink, RefreshCw, Loader2, CheckSquare, Square, X, Plus, ArrowUpRight, Trash2 } from 'lucide-react'
 import { useRouter } from '../router'
 import type { PersonConfig, PerfilData, ArtifactMeta, PautaMeta, AgendaResult, Action, ActionOwner, Demanda } from '../types/ipc'
 import { MarkdownPreview } from '../components/MarkdownPreview'
@@ -286,8 +286,20 @@ export function PersonView() {
                   actions={actions}
                   personSlug={person.slug}
                   onUpdateStatus={async (id, status) => {
-                    await window.api.actions.updateStatus(person.slug, id, status)
-                    loadActions(person.slug)
+                    try {
+                      await window.api.actions.updateStatus(person.slug, id, status)
+                      loadActions(person.slug)
+                    } catch (err) {
+                      console.error('[PersonView] updateStatus falhou:', err, { slug: person.slug, id, status })
+                    }
+                  }}
+                  onDelete={async (id) => {
+                    try {
+                      await window.api.actions.delete(person.slug, id)
+                      loadActions(person.slug)
+                    } catch (err) {
+                      console.error('[PersonView] delete falhou:', err, { slug: person.slug, id })
+                    }
                   }}
                   onSaveAction={async (action) => {
                     await window.api.actions.save(action)
@@ -679,12 +691,14 @@ function AcoesTab({
   actions,
   personSlug,
   onUpdateStatus,
+  onDelete,
   onSaveAction,
   onSendToDemandas,
 }: {
   actions: Action[]
   personSlug: string
   onUpdateStatus: (id: string, status: 'open' | 'done' | 'cancelled') => Promise<void>
+  onDelete: (id: string) => Promise<void>
   onSaveAction: (action: Action) => Promise<void>
   onSendToDemandas: (action: Action) => Promise<void>
 }) {
@@ -861,7 +875,7 @@ function AcoesTab({
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {lideradoActions.map((a) => (
-              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} />
+              <ActionRow key={a.id} action={a} onUpdateStatus={onUpdateStatus} onDelete={onDelete} />
             ))}
           </div>
         </div>
@@ -884,6 +898,7 @@ function AcoesTab({
                 key={a.id}
                 action={a}
                 onUpdateStatus={onUpdateStatus}
+                onDelete={onDelete}
                 onSendToDemandas={a.status === 'open' ? handleSendToDemandas : undefined}
                 sentToDemandas={sentToDemandas === a.id}
               />
@@ -898,11 +913,13 @@ function AcoesTab({
 function ActionRow({
   action: a,
   onUpdateStatus,
+  onDelete,
   onSendToDemandas,
   sentToDemandas,
 }: {
   action: Action
   onUpdateStatus: (id: string, status: 'open' | 'done' | 'cancelled') => Promise<void>
+  onDelete: (id: string) => Promise<void>
   onSendToDemandas?: (action: Action) => Promise<void>
   sentToDemandas?: boolean
 }) {
@@ -981,7 +998,18 @@ function ActionRow({
             </button>
           )
         )}
-        {!isCancelled && (
+        {isCancelled ? (
+          <button
+            onClick={() => onDelete(a.id)}
+            title="Excluir permanentemente"
+            style={{
+              background: 'none', border: 'none', padding: 0, cursor: 'pointer',
+              color: 'var(--text-muted)', flexShrink: 0,
+            }}
+          >
+            <Trash2 size={13} />
+          </button>
+        ) : (
           <button
             onClick={() => onUpdateStatus(a.id, 'cancelled')}
             title="Cancelar"

@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Milestone complete
-last_updated: "2026-03-27T14:38:33.963Z"
+status: Phase 999.5 Complete
+last_updated: "2026-03-27T15:10:00Z"
 progress:
   total_phases: 7
-  completed_phases: 3
-  total_plans: 5
-  completed_plans: 5
+  completed_phases: 4
+  total_plans: 6
+  completed_plans: 6
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -18,13 +18,13 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Core value:** O contexto acumulado ao longo do ciclo deve estar acessível para o gestor na hora que importa: na tela do perfil, na pauta e no relatório de calibração.
-**Current focus:** Phase 1 — PersonView Intelligence
+**Current focus:** Phase 999.5 — Gemini Preprocessing (complete)
 
 ## Current Status
 
 **Milestone:** V2.1 — Completar camada UI e prompts da V2
-**Active phase:** Phase 999.4 complete — 1 plan done
-**Last action:** Completed 999.4-01-PLAN.md (2026-03-27) — Pass 1 rota híbrida OpenRouter com fallback automático
+**Active phase:** Phase 999.5 — gemini-preprocessing (complete)
+**Last action:** Implemented Pass 0 with Gemini Flash preprocessing (2026-03-27) — Reduces Claude token consumption by ~60%
 
 ## Decisions
 
@@ -37,6 +37,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.4]: systemPrompt adicionado como 5º parâmetro opcional ao runOpenRouterPrompt — callers existentes (Pass Cerimônia) continuam válidos sem modificação
 - [Phase 999.4]: validateIngestionResult atua como gate de qualidade pós-OpenRouter — schema inválido aciona fallback para Claude CLI em vez de lançar exceção
 - [Phase 999.4]: Timeout de 60_000ms para Pass 1 via OpenRouter (vs 90_000ms via Claude CLI) — modelos leves são mais rápidos
+- [Phase 999.5]: Google AI API direta (não via OpenRouter) para Gemini Flash — mais controle e preço previsível
+- [Phase 999.5]: Temperatura 0.1 no Gemini para respostas determinísticas na limpeza de transcrições
+- [Phase 999.5]: Fallback silencioso — se pré-processamento falha, usa texto original (nunca perde dados)
 
 ## Phases
 
@@ -45,6 +48,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | 999.1 | Resumo 1:1 Estilo Qulture Rocks | ✅ Done |
 | 999.3 | Ingestion Performance Hybrid Model | ✅ Done |
 | 999.4 | OpenRouter Estágio 2 — Pass 1 modelo leve | ✅ Done |
+| 999.5 | Gemini Preprocessing Pass | ✅ Done |
 | 1 | PersonView Intelligence | ⬜ Pending |
 | 2 | Settings Reingest UX | ⬜ Pending |
 | 3 | Enriched Prompts | ⬜ Pending |
@@ -61,7 +65,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase | Plan | Duration | Tasks | Files |
 |-------|------|----------|-------|-------|
 | 999.4 | 01 | 83s | 2/2 | 2 |
+| 999.5 | 01 | ~35min | 6/6 | 6 |
 
 ## Next Action
 
-Phase 999.4 complete (1/1 plans done). Next: Phase 1 (PersonView Intelligence) — exibir insights de 1:1, sinais de terceiros e botão QR no perfil de cada liderado.
+All phases 999.x complete. Next: Phase 1 (PersonView Intelligence) — exibir insights de 1:1, sinais de terceiros e botão QR no perfil de cada liderado.

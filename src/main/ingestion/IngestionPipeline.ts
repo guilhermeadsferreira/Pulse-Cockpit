@@ -2,7 +2,8 @@ import { basename, join } from 'path'
 import { BrowserWindow } from 'electron'
 import { readFile } from './FileReader'
 import { ArtifactWriter } from './ArtifactWriter'
-import { runClaudePrompt, runOpenRouterPrompt } from './ClaudeRunner'
+import { runClaudePrompt, runWithProvider } from './ClaudeRunner'
+import { preprocessTranscript } from './GeminiPreprocessor'
 import { buildIngestionPrompt, type IngestionAIResult } from '../prompts/ingestion.prompt'
 import { buildCerimoniaSinalPrompt } from '../prompts/cerimonia-sinal.prompt'
 import { build1on1DeepPrompt, type OneOnOneResult } from '../prompts/1on1-deep.prompt'
@@ -92,6 +93,34 @@ export class IngestionPipeline {
     } catch (err) {
       console.error('[IngestionPipeline] failed to restore pending queue:', err)
     }
+  }
+
+  /**
+   * Tenta sincronizar todos os items pending cujas pessoas já estão cadastradas.
+   * Chamado no startup para resolver race conditions com iCloud sync.
+   */
+  async syncAllPending(): Promise<number> {
+    const registry = new PersonRegistry(this.workspacePath)
+    const pending = this.queue.filter((i) => i.status === 'pending' && i.personSlug)
+    if (pending.length === 0) return 0
+
+    let synced = 0
+    for (const item of pending) {
+      const slug = item.personSlug!
+      if (registry.get(slug)) {
+        try {
+          await this.syncItemToPerson(item, slug)
+          console.log(`[IngestionPipeline] auto-synced pending: ${item.fileName} → ${slug}`)
+          synced++
+        } catch (err) {
+          console.error(`[IngestionPipeline] auto-sync error: ${item.fileName}`, err)
+        }
+      }
+    }
+    if (synced > 0) {
+      console.log(`[IngestionPipeline] auto-synced ${synced} pending item(s) on startup`)
+    }
+    return synced
   }
 
   enqueue(filePath: string): void {
@@ -190,21 +219,30 @@ export class IngestionPipeline {
       for (const acao of acoes) {
         // Check if this action belongs to the manager → route to Demandas (módulo Eu)
         if (managerName && acao.responsavel?.trim().toLowerCase() === managerName) {
+          const titulo = aiResult.titulo ?? uniqueFileName
+          const participantes = aiResult.participantes_nomes?.join(', ') ?? ''
+          const contexto = participantes
+            ? `Origem: ${titulo} (${participantes})`
+            : `Origem: ${titulo}`
           demandaReg.save({
             id:          `${date}-gestor-${Math.random().toString(36).slice(2, 7)}`,
             descricao:   acao.descricao,
+            descricaoLonga: contexto,
             origem:      'Eu',
+            pessoaSlug:  aiResult.pessoa_principal ?? null,
             prazo:       acao.prazo_iso ?? null,
             criadoEm:    date,
             atualizadoEm: date,
             status:      'open',
           })
-          console.log(`[IngestionPipeline] ação do gestor → Demandas: "${acao.descricao.slice(0, 60)}"`)
+          console.log(`[IngestionPipeline] ação do gestor → Demandas: "${acao.descricao.slice(0, 60)}" [${titulo}]`)
           continue
         }
 
         if (!acao.responsavel_slug && acao.responsavel) {
-          const candidate = acao.responsavel.toLowerCase().replace(/\s+/g, '-')
+          const candidate = acao.responsavel
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase().replace(/\s+/g, '-')
           if (registeredSlugs.has(candidate)) {
             acao.responsavel_slug = candidate
           }
@@ -288,8 +326,6 @@ export class IngestionPipeline {
     const teamRegistry = registry.serializeForPrompt()
     const today = new Date().toISOString().slice(0, 10)
     const settings = SettingsManager.load()
-    const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
-    const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
 
     // Processar em batches de MAX_CONCURRENT para evitar spawnar N processos claude simultaneamente
     for (let i = 0; i < slugs.length; i += MAX_CONCURRENT) {
@@ -315,17 +351,11 @@ export class IngestionPipeline {
               today,
             })
 
-            let result: import('./ClaudeRunner').ClaudeRunnerResult
-
-            if (hybridActive) {
-              result = await runOpenRouterPrompt(settings.openRouterApiKey!, openRouterModel, prompt, 15_000)
-              if (!result.success) {
-                console.warn(`[IngestionPipeline] OpenRouter fallback para "${slug}": ${result.error}`)
-                result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
-              }
-            } else {
-              result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
-            }
+            const result = await runWithProvider('ceremonySinals', settings, prompt, {
+              claudeBinPath,
+              claudeTimeoutMs: 60_000,
+              openRouterTimeoutMs: 60_000,
+            })
             if (!result.success || !result.data) {
               console.warn(`[IngestionPipeline] sinal cerimônia falhou para "${slug}": ${result.error ?? 'sem dados'}`)
               return
@@ -386,12 +416,10 @@ export class IngestionPipeline {
     claudeBinPath: string,
     settings: import('../registry/SettingsManager').AppSettings,
   ): Promise<void> {
-    const { buildCerimoniaSinalPrompt } = await import('../prompts/cerimonia-sinal.prompt')
-    const { validateCerimoniaSinalResult } = await import('./SchemaValidator')
     const today = new Date().toISOString().slice(0, 10)
 
     const prompt = buildCerimoniaSinalPrompt({
-      teamRegistry: new (await import('../registry/PersonRegistry')).PersonRegistry(this.workspacePath).serializeForPrompt(),
+      teamRegistry: new PersonRegistry(this.workspacePath).serializeForPrompt(),
       pessoaNome: settings.managerName!,
       pessoaCargo: settings.managerRole ?? 'Gestor',
       pessoaRelacao: 'eu',
@@ -402,19 +430,11 @@ export class IngestionPipeline {
       today,
     })
 
-    const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
-    const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
-
-    let result: import('./ClaudeRunner').ClaudeRunnerResult
-    if (hybridActive) {
-      result = await runOpenRouterPrompt(settings.openRouterApiKey!, openRouterModel, prompt, 15_000)
-      if (!result.success) {
-        console.warn(`[IngestionPipeline] OpenRouter fallback gestor: ${result.error}`)
-        result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
-      }
-    } else {
-      result = await runClaudePrompt(claudeBinPath, prompt, 60_000)
-    }
+    const result = await runWithProvider('ceremonySinals', settings, prompt, {
+      claudeBinPath,
+      claudeTimeoutMs: 60_000,
+      openRouterTimeoutMs: 60_000,
+    })
 
     if (!result.success || !result.data) {
       console.warn('[IngestionPipeline] sinal cerimônia gestor: sem dados')
@@ -424,14 +444,12 @@ export class IngestionPipeline {
     if (!validation.valid) return
 
     const sinal = result.data as import('../prompts/cerimonia-sinal.prompt').CerimoniaSinalResult
-    const { mkdirSync: mkdir2, writeFileSync: write2 } = await import('fs')
-    const { join: join2 } = await import('path')
 
-    const gestorCicloDir = join2(this.workspacePath, 'gestor', 'ciclo')
-    mkdir2(gestorCicloDir, { recursive: true })
+    const gestorCicloDir = pathJoin(this.workspacePath, 'gestor', 'ciclo')
+    mkdirSync(gestorCicloDir, { recursive: true })
 
     const fileName = `${aiResult.data_artefato}-${aiResult.tipo}-gestor-${Math.random().toString(36).slice(2, 6)}.md`
-    const filePath = join2(gestorCicloDir, fileName)
+    const filePath = pathJoin(gestorCicloDir, fileName)
 
     const tipoLabel = { '1on1': '1:1', reuniao: 'Reunião', daily: 'Daily', planning: 'Planning', retro: 'Retro', feedback: 'Feedback', outro: 'Evento' }[aiResult.tipo] ?? 'Evento'
     const titulo = `${tipoLabel} — Minha Participação`
@@ -461,7 +479,7 @@ export class IngestionPipeline {
       `*Saúde: ${sinal.indicador_saude} — ${sinal.motivo_indicador}*`,
     ].filter((l) => l !== '').join('\n')
 
-    write2(filePath, content, 'utf-8')
+    writeFileSync(filePath, content, 'utf-8')
     console.log(`[IngestionPipeline] sinal cerimônia gestor gravado: ${fileName}`)
   }
 
@@ -541,13 +559,21 @@ export class IngestionPipeline {
     console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT pass 1on1 para "${slug}" (slot ${this.active1on1}/${MAX_CONCURRENT_1ON1})`)
     let result: Awaited<ReturnType<typeof runClaudePrompt>>
     try {
-      result = await runClaudePrompt(claudeBinPath, prompt, 300_000, 1, settings.ingestionModel ?? 'haiku')
+      result = await runWithProvider('ingestionDeep1on1', settings, prompt, {
+        claudeBinPath,
+        claudeTimeoutMs: 300_000,
+      })
     } finally {
       release1on1()
     }
 
+    console.log(`[IngestionPipeline] ${new Date().toTimeString().slice(0, 8)} GMT pass 1on1 resultado para "${slug}": success=${result.success} hasData=${!!result.data} error=${result.error ?? 'none'} rawLen=${result.rawOutput?.length ?? 0}`)
+
     if (!result.success || !result.data) {
       console.warn(`[IngestionPipeline] pass 1on1 falhou para "${slug}": ${result.error ?? 'sem dados'}`)
+      if (result.rawOutput) {
+        console.warn(`[IngestionPipeline] pass 1on1 rawOutput (primeiros 500 chars):`, result.rawOutput.slice(0, 500))
+      }
       return null
     }
 
@@ -558,6 +584,7 @@ export class IngestionPipeline {
         ...validation.typeErrors,
       ].join('; ')
       console.warn(`[IngestionPipeline] schema inválido no pass 1on1 para "${slug}": ${details}`)
+      console.warn(`[IngestionPipeline] pass 1on1 keys recebidas:`, Object.keys(result.data as Record<string, unknown>))
       return null
     }
 
@@ -592,18 +619,27 @@ export class IngestionPipeline {
       // 4. Route acoes_gestor to DemandaRegistry (módulo Eu)
       if (oneOnOneResult.acoes_gestor.length > 0) {
         const demandaReg = new DemandaRegistry(this.workspacePath)
+        const personConfig = new PersonRegistry(this.workspacePath).get(slug)
+        const personName = personConfig?.nome ?? slug
+        const relacao = personConfig?.relacao ?? 'liderado'
+        const origemMap: Record<string, import('../../renderer/src/types/ipc').DemandaOrigem> = {
+          liderado: 'Liderado', par: 'Par', gestor: 'Líder', stakeholder: 'Par',
+        }
+        const origem = origemMap[relacao] ?? 'Liderado'
         for (const acao of oneOnOneResult.acoes_gestor) {
           demandaReg.save({
             id:           `${date}-1on1-gestor-${Math.random().toString(36).slice(2, 7)}`,
             descricao:    acao.descricao,
-            origem:       'Liderado',
+            descricaoLonga: `Origem: 1:1 com ${personName} (${date})`,
+            origem,
+            pessoaSlug:   slug,
             prazo:        acao.prazo_iso ?? null,
             criadoEm:     date,
             atualizadoEm: date,
             status:       'open',
           })
         }
-        console.log(`[IngestionPipeline] ${oneOnOneResult.acoes_gestor.length} ação(ões) do gestor → Demandas`)
+        console.log(`[IngestionPipeline] ${oneOnOneResult.acoes_gestor.length} ação(ões) do gestor → Demandas [1:1 ${personName}, origem=${origem}]`)
       }
     } finally {
       release()
@@ -650,7 +686,7 @@ export class IngestionPipeline {
     if (totalArtefatos > 0 && totalArtefatos % 10 === 0) {
       const settings = SettingsManager.load()
       if (settings.claudeBinPath) {
-        new ProfileCompressor(this.workspacePath, settings.claudeBinPath)
+        new ProfileCompressor(this.workspacePath, settings)
           .compress(slug, totalArtefatos)
           .catch((err) => console.warn(`[IngestionPipeline] compressão falhou para "${slug}":`, err))
       }
@@ -931,7 +967,28 @@ export class IngestionPipeline {
       const teamRegistry     = registry.serializeForPrompt()
 
       // Read file content
-      const { text } = await readFile(item.filePath)
+      let { text } = await readFile(item.filePath)
+
+      // Pass 0: Gemini preprocessing (optional)
+      // Reduz tokens enviados ao Claude limpando transcrições brutas
+      const geminiActive = !!(settings.useGeminiPreprocessing && settings.googleAiApiKey)
+      if (geminiActive) {
+        console.log(`[IngestionPipeline] Pass 0: Pré-processamento Gemini ativo`)
+        const preprocessResult = await preprocessTranscript(settings.googleAiApiKey!, text, 90_000, item.fileName)
+        if (preprocessResult.success) {
+          text = preprocessResult.cleanedText
+          console.log(
+            `[IngestionPipeline] Pass 0: Transcript reduzido de ${preprocessResult.originalLength} ` +
+            `para ${preprocessResult.cleanedLength} chars (${preprocessResult.reductionPercent.toFixed(1)}% economia)`
+          )
+        } else {
+          const isTimeout = preprocessResult.error?.includes('Timeout')
+          const hint = isTimeout
+            ? 'Tente novamente ou desative o pré-processamento nas Settings.'
+            : 'Verifique sua API key e créditos em aistudio.google.com, ou desative o pré-processamento nas Settings.'
+          throw new Error(`Pré-processamento Gemini falhou: ${preprocessResult.error}. ${hint}`)
+        }
+      }
 
       // Read current perfil.md if there's a likely person match
       // (we'll figure out the person after AI analysis)
@@ -943,8 +1000,6 @@ export class IngestionPipeline {
 
       const managerName = settings.managerName ?? undefined
 
-      const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
-      const openRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
       const PASS1_SYSTEM_PROMPT = 'You must respond with valid JSON only. Do not include markdown code blocks, explanations, or any text outside the JSON object.'
 
       // Pass 1: identify pessoa_principal (no perfil context yet)
@@ -956,33 +1011,13 @@ export class IngestionPipeline {
         managerName,
       })
 
-      let resultPass1: import('./ClaudeRunner').ClaudeRunnerResult
-
-      if (hybridActive) {
-        resultPass1 = await runOpenRouterPrompt(
-          settings.openRouterApiKey!,
-          openRouterModel,
-          promptPass1,
-          15_000,
-          PASS1_SYSTEM_PROMPT,
-        )
-        if (resultPass1.success && resultPass1.data) {
-          const schemaCheck = validateIngestionResult(resultPass1.data)
-          if (!schemaCheck.valid) {
-            const details = [
-              ...schemaCheck.missingFields.map((f) => `campo ausente: ${f}`),
-              ...schemaCheck.typeErrors,
-            ].join('; ')
-            console.warn(`[IngestionPipeline] OpenRouter Pass 1 schema inválido, fallback para Claude CLI: ${details}`)
-            resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
-          }
-        } else {
-          console.warn(`[IngestionPipeline] OpenRouter Pass 1 falhou, fallback para Claude CLI: ${resultPass1.error}`)
-          resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
-        }
-      } else {
-        resultPass1 = await runClaudePrompt(settings.claudeBinPath, promptPass1, 90_000)
-      }
+      const resultPass1 = await runWithProvider('ingestionPass1', settings, promptPass1, {
+        claudeBinPath: settings.claudeBinPath,
+        claudeTimeoutMs: 90_000,
+        openRouterTimeoutMs: 60_000,
+        systemPrompt: PASS1_SYSTEM_PROMPT,
+        validate: validateIngestionResult,
+      })
 
       if (!resultPass1.success || !resultPass1.data) {
         throw new Error(resultPass1.error || 'Claude não retornou dados válidos')
@@ -1011,7 +1046,10 @@ export class IngestionPipeline {
             managerName,
           })
           // Pass 2 carries the full perfil.md in context — allow up to 3× the base timeout
-          const resultPass2 = await runClaudePrompt(settings.claudeBinPath, promptPass2, 180_000)
+          const resultPass2 = await runWithProvider('ingestionPass2', settings, promptPass2, {
+            claudeBinPath: settings.claudeBinPath,
+            claudeTimeoutMs: 180_000,
+          })
           if (resultPass2.success && resultPass2.data) {
             const validation2 = validateIngestionResult(resultPass2.data)
             if (validation2.valid) {

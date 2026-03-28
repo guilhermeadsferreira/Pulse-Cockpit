@@ -1,4 +1,5 @@
 import { spawn } from 'child_process'
+import type { AppSettings, IngestionOperation } from '../registry/SettingsManager'
 
 export interface ClaudeRunnerResult {
   success: boolean
@@ -181,6 +182,138 @@ export async function runOpenRouterPrompt(
   } finally {
     clearTimeout(timer)
   }
+}
+
+// ── Provider resolution ───────────────────────────────────────────────────────
+
+interface ResolvedProvider {
+  provider: 'claude-cli' | 'openrouter'
+  /** Model para claude-cli (passed via --model). undefined = usa o default do CLI. */
+  claudeModel: string | undefined
+  openRouterModel: string
+  openRouterApiKey: string | undefined
+  fallbackToClaude: boolean
+}
+
+// Operações elegíveis no modo legado useHybridModel
+const LEGACY_HYBRID_OPS: IngestionOperation[] = ['ingestionPass1', 'ceremonySinals']
+
+export function resolveProvider(operation: IngestionOperation, settings: AppSettings): ResolvedProvider {
+  const defaultOpenRouterModel = settings.openRouterModel ?? 'google/gemma-3-27b-it'
+  // ingestionDeep1on1 tem modelo legado específico; outras operações não passam --model por padrão
+  const legacyClaudeModel = operation === 'ingestionDeep1on1'
+    ? (settings.ingestionModel ?? 'haiku')
+    : undefined
+
+  // 1. Override por operação
+  const override = settings.providers?.[operation]
+  if (override) {
+    const isOpenRouter = override.provider === 'openrouter'
+    return {
+      provider: override.provider,
+      claudeModel: isOpenRouter ? legacyClaudeModel : (override.model ?? legacyClaudeModel),
+      openRouterModel: isOpenRouter ? (override.model ?? defaultOpenRouterModel) : defaultOpenRouterModel,
+      openRouterApiKey: settings.openRouterApiKey,
+      fallbackToClaude: override.fallbackToClaude ?? isOpenRouter,
+    }
+  }
+
+  // 2. Provider padrão global
+  if (settings.defaultProvider) {
+    const isOpenRouter = settings.defaultProvider === 'openrouter'
+    return {
+      provider: settings.defaultProvider,
+      claudeModel: isOpenRouter ? legacyClaudeModel : legacyClaudeModel,
+      openRouterModel: defaultOpenRouterModel,
+      openRouterApiKey: settings.openRouterApiKey,
+      fallbackToClaude: isOpenRouter,
+    }
+  }
+
+  // 3. Legacy: useHybridModel (backward compat — só para ops elegíveis)
+  const hybridActive = !!(settings.useHybridModel && settings.openRouterApiKey)
+  if (hybridActive && LEGACY_HYBRID_OPS.includes(operation)) {
+    return {
+      provider: 'openrouter',
+      claudeModel: legacyClaudeModel,
+      openRouterModel: defaultOpenRouterModel,
+      openRouterApiKey: settings.openRouterApiKey,
+      fallbackToClaude: true,
+    }
+  }
+
+  // 4. Default: claude-cli
+  return {
+    provider: 'claude-cli',
+    claudeModel: legacyClaudeModel,
+    openRouterModel: defaultOpenRouterModel,
+    openRouterApiKey: settings.openRouterApiKey,
+    fallbackToClaude: false,
+  }
+}
+
+/**
+ * Executa um prompt usando o provider configurado para a operação.
+ * Gerencia fallback automático para claude-cli se o provider principal falhar.
+ */
+export async function runWithProvider(
+  operation: IngestionOperation,
+  settings: AppSettings,
+  prompt: string,
+  opts: {
+    claudeBinPath: string
+    claudeTimeoutMs?: number
+    openRouterTimeoutMs?: number
+    systemPrompt?: string
+    validate?: (data: unknown) => { valid: boolean; missingFields: string[]; typeErrors: string[] }
+  },
+): Promise<ClaudeRunnerResult> {
+  const resolved = resolveProvider(operation, settings)
+  const claudeTimeout = opts.claudeTimeoutMs ?? 90_000
+  const openRouterTimeout = opts.openRouterTimeoutMs ?? 15_000
+
+  if (resolved.provider === 'openrouter') {
+    if (!resolved.openRouterApiKey) {
+      console.warn(`[runWithProvider] ${operation}: OpenRouter selecionado mas sem API key — usando Claude CLI`)
+      return runClaudePrompt(opts.claudeBinPath, prompt, claudeTimeout, 1, resolved.claudeModel)
+    }
+
+    const result = await runOpenRouterPrompt(
+      resolved.openRouterApiKey,
+      resolved.openRouterModel,
+      prompt,
+      openRouterTimeout,
+      opts.systemPrompt,
+    )
+
+    if (result.success && result.data) {
+      if (opts.validate) {
+        const check = opts.validate(result.data)
+        if (!check.valid) {
+          const details = [
+            ...check.missingFields.map((f) => `campo ausente: ${f}`),
+            ...check.typeErrors,
+          ].join('; ')
+          console.warn(`[runWithProvider] ${operation} OpenRouter schema inválido${resolved.fallbackToClaude ? ', fallback para Claude' : ''}: ${details}`)
+          if (resolved.fallbackToClaude) {
+            return runClaudePrompt(opts.claudeBinPath, prompt, claudeTimeout, 1, resolved.claudeModel)
+          }
+          return result
+        }
+      }
+      return result
+    }
+
+    if (resolved.fallbackToClaude) {
+      console.warn(`[runWithProvider] ${operation} OpenRouter falhou, fallback para Claude: ${result.error}`)
+      return runClaudePrompt(opts.claudeBinPath, prompt, claudeTimeout, 1, resolved.claudeModel)
+    }
+
+    return result
+  }
+
+  // claude-cli
+  return runClaudePrompt(opts.claudeBinPath, prompt, claudeTimeout, 1, resolved.claudeModel)
 }
 
 function parseOutput(raw: string): ClaudeRunnerResult {

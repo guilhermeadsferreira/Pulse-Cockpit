@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, copyFileSync, renameSync } from 'fs'
 import { join } from 'path'
-import { runClaudePrompt } from './ClaudeRunner'
+import { runWithProvider } from './ClaudeRunner'
+import type { AppSettings } from '../registry/SettingsManager'
 import { buildCompressionPrompt, type CompressionAIResult } from '../prompts/compression.prompt'
 
 const SECTION_PATTERNS = {
@@ -12,9 +13,11 @@ const SECTION_PATTERNS = {
 
 export class ProfileCompressor {
   private pessoasDir: string
+  private claudeBin: string
 
-  constructor(private workspacePath: string, private claudeBin: string) {
+  constructor(private workspacePath: string, private settings: AppSettings) {
     this.pessoasDir = join(workspacePath, 'pessoas')
+    this.claudeBin = settings.claudeBinPath
   }
 
   /**
@@ -38,7 +41,10 @@ export class ProfileCompressor {
       slug, totalArtefatos, resumoEvolutivo, pontosAtencao, conquistas, temas,
     })
 
-    const result = await runClaudePrompt(this.claudeBin, prompt, 120_000)
+    const result = await runWithProvider('profileCompression', this.settings, prompt, {
+      claudeBinPath: this.claudeBin,
+      claudeTimeoutMs: 120_000,
+    })
     if (!result.success || !result.data) {
       console.warn(`[ProfileCompressor] falhou para "${slug}": ${result.error ?? 'sem dados'}`)
       return

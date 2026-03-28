@@ -55,6 +55,7 @@ declare global {
         list:         (slug: string) => Promise<Action[]>
         save:         (action: unknown) => Promise<void>
         updateStatus: (slug: string, id: string, status: ActionStatus) => Promise<void>
+        delete:       (slug: string, id: string) => Promise<void>
       }
 
       shell: {

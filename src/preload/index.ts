@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('api', {
     list:         (slug: string)                              => ipcRenderer.invoke('actions:list', slug),
     save:         (action: unknown)                           => ipcRenderer.invoke('actions:save', action),
     updateStatus: (slug: string, id: string, status: string) => ipcRenderer.invoke('actions:update-status', slug, id, status),
+    delete:       (slug: string, id: string)                  => ipcRenderer.invoke('actions:delete', slug, id),
   },
 
   eu: {

@@ -18,7 +18,14 @@ export class ActionRegistry {
     try {
       const raw = readFileSync(filePath, 'utf-8')
       const data = yaml.load(raw) as { actions?: Action[] }
-      return data?.actions ?? []
+      const actions = data?.actions ?? []
+      // Dedup defensivo: remove duplicatas por ID preservando a primeira ocorrência
+      const seenIds = new Set<string>()
+      return actions.filter((a) => {
+        if (seenIds.has(a.id)) return false
+        seenIds.add(a.id)
+        return true
+      })
     } catch {
       return []
     }
@@ -35,13 +42,26 @@ export class ActionRegistry {
     this.write(action.personSlug, actions)
   }
 
+  delete(slug: string, id: string): void {
+    const actions = this.list(slug)
+    // Remove todas as cópias com o mesmo ID (dedup defensivo)
+    const filtered = actions.filter((a) => a.id !== id)
+    if (filtered.length !== actions.length) {
+      this.write(slug, filtered)
+    }
+  }
+
   updateStatus(slug: string, id: string, status: ActionStatus): void {
     const actions = this.list(slug)
-    const action = actions.find((a) => a.id === id)
-    if (!action) return
-    action.status = status
-    if (status === 'done') action.concluidoEm = new Date().toISOString().slice(0, 10)
-    this.write(slug, actions)
+    let changed = false
+    for (const action of actions) {
+      if (action.id === id) {
+        action.status = status
+        if (status === 'done') action.concluidoEm = new Date().toISOString().slice(0, 10)
+        changed = true
+      }
+    }
+    if (changed) this.write(slug, actions)
   }
 
   /**
@@ -85,9 +105,12 @@ export class ActionRegistry {
       }
     })
 
-    // Deduplicate by texto to avoid creating the same action twice on re-ingest
+    // Deduplicate by ID and texto to avoid creating the same action twice on re-ingest
+    const existingIds    = new Set(existing.map((a) => a.id))
     const existingTextos = new Set(existing.map((a) => a.texto.trim().toLowerCase()))
-    const toAdd = newActions.filter((a) => !existingTextos.has(a.texto.trim().toLowerCase()))
+    const toAdd = newActions.filter(
+      (a) => !existingIds.has(a.id) && !existingTextos.has(a.texto.trim().toLowerCase()),
+    )
 
     if (toAdd.length > 0) {
       this.write(slug, [...toAdd, ...existing])
@@ -140,6 +163,7 @@ export class ActionRegistry {
     artifactFileName: string,
   ): void {
     const existing = this.list(slug)
+    const existingIds    = new Set(existing.map((a) => a.id))
     const existingTextos = new Set(existing.map((a) => a.texto.trim().toLowerCase()))
 
     const newActions: Action[] = []
@@ -148,7 +172,8 @@ export class ActionRegistry {
     for (let i = 0; i < result.acoes_liderado.length; i++) {
       const acao = result.acoes_liderado[i]
       const texto = `${slug}: ${acao.descricao}${acao.prazo_iso ? ` até ${acao.prazo_iso}` : ''}`
-      if (existingTextos.has(texto.trim().toLowerCase())) continue
+      const candidateId = `${date}-1on1-${slug}-${i}`
+      if (existingIds.has(candidateId) || existingTextos.has(texto.trim().toLowerCase())) continue
 
       newActions.push({
         id:               `${date}-1on1-${slug}-${i}`,
