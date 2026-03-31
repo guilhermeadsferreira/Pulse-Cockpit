@@ -46,8 +46,17 @@ Analise o artefato do ponto de vista de ${managerName} como PROTAGONISTA — o q
 
 Regras:
 - contribuicoes: mínimo 1 item. Foco no que ${managerName} FEZ (não o time). Use verbos de ação no passado.
-- decisoes: pode ser array vazio [] se não houve decisão clara do gestor.
-- aprendizados: pode ser array vazio [].
+- decisoes: lista de decisões ou direcionamentos com substância. Uma "decisão" só é registrada se há um trade-off explícito, rejeição de alternativa, ou posição assumida frente à ambiguidade. PELO MENOS UM dos seguintes deve estar presente:
+  (a) trade-off explícito — ex: "optamos por X em detrimento de Y porque Z"
+  (b) rejeição de uma alternativa — "descartamos a opção Y pois Z"
+  (c) uma posição tomada frente à ambiguidade ou pressão — "mantivemos o prazo apesar de X porque Y"
+  NÃO registre como decisão: atualizações de status ("sprint foi concluída"), planos futuros sem posicionamento ("vamos ver"), ou frases neutras sem escolha ("continuamos como está").
+  Array vazio [] apenas se genuinamente não houve nenhuma decisão com substância neste artefato.
+- aprendizados: OBRIGATÓRIO — mínimo 1 item. Sempre há algo que o gestor aprendeu, observou ou pode aplicar — sobre dinâmica do time, capacidade de estimativa, processo de decisão, necessidade de alguém, sinal que apareceu, dependência identificada. Cada item descreve: o QUE foi observado/aprendido + o IMPACTO ou consequência para gestão futura. Nunca retorne array vazio.
+  Exemplos de itens válidos (mesmo quando o evento foi operacional):
+  - "Ana demonstrou capacidade de liderança técnica sob pressão — pode ser candidata a Tech Lead no próximo ciclo"
+  - "Estimativas do time para tasks de infraestrutura são consistentemente 2x acima do realizado — padrão a calibrar nos próximos plannings"
+  - "Decisão de atrasar o lançamento gerou alívio no time — sinaliza que estavam sob pressão não comunicada antes"
 - acoes_minhas: apenas ações que o GESTOR assumiu para si mesmo (não ações do time).
 - data_artefato: extrair do conteúdo do artefato; se não encontrar, usar ${today}.
 - Escreva em português brasileiro claro e profissional.
