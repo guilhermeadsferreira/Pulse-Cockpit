@@ -52,7 +52,7 @@ Regras obrigatórias:
 - "resumo_evolutivo": parágrafo condensado de 4–6 frases cobrindo o arco da pessoa. Preserve o estado mais recente, marcos de carreira e padrões de comportamento duradouros. Descarte eventos pontuais já superados.
 - "pontos_ativos": PRESERVE todos os itens NÃO resolvidos dos Pontos de Atenção (linhas SEM ~~strikethrough~~). Um ponto é "resolvido" se:
   (a) está riscado com ~~strikethrough~~ no bloco — ex: "~~Estimativas sistematicamente acima do realizado~~"
-  (b) OU foi listado em `pontos_resolvidos` de algum artefato recente.
+  (b) OU foi listado em pontos_resolvidos de algum artefato recente.
   NUNCA remova pontos sem um desses dois critérios explícitos.
 - "conquistas": consolide itens mais antigos em marcos concisos usando o formato obrigatório "[TÍTULO DO QUÊ] — [OUTCOME mensurável ou qualitativo]". Exemplos: "Liderou migração Kafka — latência -40%, sem downtime" / "Onboardou dois novos desenvolvedores — ambos autônomos em 3 semanas" / "Implementou feature de pagamentos — redução de 30% em erros de checkout reportados pelos clientes". Preserve os últimos 60 dias verbatim. Cada item deve ser autônomo e citável sem contexto adicional.
 - "temas": deduplique e consolide temas similares. Máximo 8 temas. Ordene por relevância.

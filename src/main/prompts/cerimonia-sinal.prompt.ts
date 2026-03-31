@@ -78,7 +78,7 @@ REGRAS OBRIGATÓRIAS:
 - Se a pessoa não aparece ou tem participação mínima: retorne arrays vazios, confianca "baixa", nivel_engajamento 1 ou 2
 - Não confunda participação com simples presença — estar listado como participante sem falar não é engajamento
 
-**Expectativas mínimas por tipo de cerimônia (calibre `nivel_engajamento` e `indicador_saude` com base nisso):**
+**Expectativas mínimas por tipo de cerimônia (calibre nivel_engajamento e indicador_saude com base nisso):**
 - **daily**: qualquer atualização de status — mesmo breve — conta como participação. Silêncio total é sinal.
 - **planning**: espera-se que a pessoa comente sobre itens do backlog relevantes ao seu trabalho, faça estimativas ou perguntas. Só ouvir sem reagir é participação mínima.
 - **retro**: espera-se pelo menos uma perspectiva própria (positiva ou de melhoria). Concordar com tudo sem contribuição original é sinal de baixo engajamento.
