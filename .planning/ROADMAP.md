@@ -33,8 +33,8 @@ Plans:
 - [ ] 01-01-PLAN.md — Auditar/confirmar PRMT-01 a PRMT-07 (ingestion, 1on1-deep, cerimonia-sinal, compression)
 - [x] 01-02-PLAN.md — Auditar PRMT-08, PRMT-09 e implementar PRMT-10 (cycle.prompt.ts)
 - [x] 01-03-PLAN.md — Implementar PRMT-11, PRMT-12 (autoavaliacao.prompt.ts)
-- [ ] 01-04-PLAN.md — Implementar PRMT-13, PRMT-14, PRMT-15 (gemini-preprocessing.prompt.ts)
-- [ ] 01-05-PLAN.md — Implementar PRMT-16, PRMT-17 (gestor-ciclo.prompt.ts)
+- [x] 01-04-PLAN.md — Implementar PRMT-13, PRMT-14, PRMT-15 (gemini-preprocessing.prompt.ts)
+- [x] 01-05-PLAN.md — Implementar PRMT-16, PRMT-17 (gestor-ciclo.prompt.ts)
 
 ### Phase 2: Pipeline & Schema
 **Goal**: O pipeline persiste dados sem duplicatas, mantem health history enxuto e retorna dados externos com tipagem segura
@@ -76,7 +76,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Prompt Refinements | 2/5 | In Progress|  |
+| 1. Prompt Refinements | 4/5 | In Progress|  |
 | 2. Pipeline & Schema | 0/TBD | Not started | - |
 | 3. GitHub Metrics & CrossAnalyzer | 0/TBD | Not started | - |
 | 4. Action System & UX Avancado | 0/TBD | Not started | - |

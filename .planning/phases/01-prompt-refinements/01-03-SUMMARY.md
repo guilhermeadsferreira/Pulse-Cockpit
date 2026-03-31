@@ -71,3 +71,10 @@ None - plan executed exactly as written.
 ## Known Stubs
 
 None - ambas as implementacoes sao funcionais e wired na interface e no render.
+
+## Self-Check: PASSED
+
+- FOUND: src/main/prompts/autoavaliacao.prompt.ts
+- FOUND: .planning/phases/01-prompt-refinements/01-03-SUMMARY.md
+- FOUND commit e90aeda: feat(01-03): calibrar como_demonstrei_valores por tipo de role (PRMT-11)
+- FOUND commit fe697a4: feat(01-03): adicionar campo desafios_observados a autoavaliacao (PRMT-12)

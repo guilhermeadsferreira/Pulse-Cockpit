@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-03-31T22:22:24.423Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-03-31T22:22:46.600Z"
 last_activity: 2026-03-31
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 2
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-03-31)
 ## Current Position
 
 Phase: 01 (prompt-refinements) — EXECUTING
-Plan: 3 of 5
+Plan: 4 of 5
 Status: Ready to execute
 Last activity: 2026-03-31
 
@@ -53,6 +53,7 @@ Progress: [░░░░░░░░░░] 0%
 
 *Updated after each plan completion*
 | Phase 01 P03 | 1m | 2 tasks | 1 files |
+| Phase 01 P04 | 2 | 2 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - Milestone init: Manter tasks/ como referencia historica com criterios de aceite detalhados
 - [Phase 01]: desafios_observados como array condicional no render — omitido se vazio para nao poluir markdown de usuarios sem desafios registrados
 - [Phase 01]: Calibracao por role embutida na instrucao do campo (sem logica TypeScript) — LLM interpreta o managerRole passado via params
+- [Phase 01]: detectPreprocessingMode usa conteudo como sinal primario e filename como fallback para nomes ambiguos
+- [Phase 01]: speaker_confidence opcional na validacao (isValidResult) para backward-compat com respostas antigas do Gemini
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-31T22:22:24.420Z
-Stopped at: Completed 01-03-PLAN.md
+Last session: 2026-03-31T22:22:46.597Z
+Stopped at: Completed 01-04-PLAN.md
 Resume file: None
