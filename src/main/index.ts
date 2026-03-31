@@ -830,11 +830,12 @@ app.whenReady().then(async () => {
   fileWatcher.restorePending() // restore items pending from previous session
   fileWatcher.syncAllPending() // sync pending items whose persons are now registered
 
-  // Scheduler: daily report + sprint change detection
+  // Scheduler: daily report + sprint change detection + sprint polling
   const scheduler = new Scheduler(settings.workspacePath)
   scheduler.onAppStart().catch((err) => {
     Logger.getInstance().child('Scheduler').warn('onAppStart falhou', { error: err instanceof Error ? err.message : String(err) })
   })
+  app.on('before-quit', () => scheduler.stopSprintPolling())
 
   setupAutoUpdater()
 

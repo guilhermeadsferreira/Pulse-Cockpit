@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { PersonRegistry, type PersonConfig } from '../registry/PersonRegistry'
 import { SettingsManager, type AppSettings } from '../registry/SettingsManager'
@@ -45,6 +45,11 @@ export class MonthlyReportGenerator {
     const monthStr = String(targetMonth).padStart(2, '0')
     const monthName = MESES[targetMonth - 1]
     const filePath = join(this.relatoriosDir, `Monthly-${monthStr}-${targetYear}.md`)
+
+    if (existsSync(filePath)) {
+      log.debug('monthly report já existe, pulando geração', { year: targetYear, month: targetMonth })
+      return filePath
+    }
 
     log.info('generateMonthlyReport: iniciando', { year: targetYear, month: targetMonth })
 

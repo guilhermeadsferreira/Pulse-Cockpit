@@ -145,7 +145,7 @@ export function validateCerimoniaSinalResult(data: unknown): ValidationResult {
     typeErrors.push(`indicador_saude inválido: "${obj.indicador_saude}"`)
   }
 
-  if (obj.confianca && !['alta', 'media', 'baixa'].includes(obj.confianca as string)) {
+  if (obj.confianca !== undefined && !['alta', 'media', 'baixa'].includes(obj.confianca as string)) {
     typeErrors.push(`confianca inválido: "${obj.confianca}"`)
   }
 

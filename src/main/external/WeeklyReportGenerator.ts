@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 import { PersonRegistry, type PersonConfig } from '../registry/PersonRegistry'
 import { SettingsManager, type AppSettings } from '../registry/SettingsManager'
@@ -44,6 +44,11 @@ export class WeeklyReportGenerator {
     const formattedStart = this.formatDateBR(start)
     const formattedEnd = this.formatDateBR(end)
     const filePath = join(this.relatoriosDir, `Weekly-${formattedStart}-a-${formattedEnd}.md`)
+
+    if (existsSync(filePath)) {
+      log.debug('weekly report já existe, pulando geração', { start, end })
+      return filePath
+    }
 
     log.info('generateWeeklyReport: iniciando', { start, end })
 

@@ -44,6 +44,11 @@ export class DailyReportGenerator {
     const formattedDate = this.formatDateBR(today)
     const filePath = join(this.relatoriosDir, `Daily-${formattedDate}.md`)
 
+    if (existsSync(filePath)) {
+      log.debug('daily report já existe, pulando geração', { date: today })
+      return filePath
+    }
+
     log.info('generateDailyReport: iniciando', { date: today })
 
     const registry = new PersonRegistry(this.workspacePath)
@@ -166,7 +171,9 @@ export class DailyReportGenerator {
     const lines: string[] = []
     const formattedDate = this.formatDateLong(today)
 
+    const collectedAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
     lines.push(`# Daily Report — ${formattedDate}`, '')
+    lines.push(`> Dados coletados às ${collectedAt} — cache pode ter até 1h de defasagem.`, '')
 
     const allBlockers: Array<{
       person: string

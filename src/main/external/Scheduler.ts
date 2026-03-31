@@ -20,15 +20,39 @@ interface SchedulerState {
 
 const CACHE_DIR_NAME = 'cache'
 
+const SPRINT_POLL_INTERVAL_MS = 30 * 60 * 1000 // 30 min
+
 export class Scheduler {
   private workspacePath: string
   private statePath: string
   private externalPass: ExternalDataPass
+  private sprintPollInterval: NodeJS.Timeout | null = null
 
   constructor(workspacePath: string) {
     this.workspacePath = workspacePath
     this.statePath = join(workspacePath, '..', CACHE_DIR_NAME, 'scheduler-state.json')
     this.externalPass = new ExternalDataPass(workspacePath)
+  }
+
+  startSprintPolling(): void {
+    if (this.sprintPollInterval) return
+    this.sprintPollInterval = setInterval(async () => {
+      const settings = SettingsManager.load()
+      if (settings.jiraEnabled && settings.jiraBoardId) {
+        await this.checkSprintChange(settings).catch((err) =>
+          log.warn('sprint poll falhou', { error: err instanceof Error ? err.message : String(err) })
+        )
+      }
+    }, SPRINT_POLL_INTERVAL_MS)
+    log.debug('sprint polling iniciado', { intervalMs: SPRINT_POLL_INTERVAL_MS })
+  }
+
+  stopSprintPolling(): void {
+    if (this.sprintPollInterval) {
+      clearInterval(this.sprintPollInterval)
+      this.sprintPollInterval = null
+      log.debug('sprint polling encerrado')
+    }
   }
 
   /**
@@ -64,6 +88,7 @@ export class Scheduler {
 
     if (jiraEnabled && settings.jiraBoardId) {
       await this.checkSprintChange(settings)
+      this.startSprintPolling()
     }
 
     // Auto-sync GitHub team repos on startup if cache expired or repos empty

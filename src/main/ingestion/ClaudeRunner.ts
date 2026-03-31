@@ -79,7 +79,11 @@ function spawnOnce(
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
-      proc.kill()
+      proc.kill('SIGTERM')
+      // Se o processo ignorar SIGTERM, força encerramento após 5s
+      setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch { /* processo já encerrado */ }
+      }, 5_000)
       resolve({ success: false, error: `Timeout após ${timeoutMs / 1000}s` })
     }, timeoutMs)
 
