@@ -20,6 +20,56 @@ import { buildAutoavaliacaoPrompt, renderAutoavaliacaoMarkdown, type Autoavaliac
 import type { CycleReportParams, AutoavaliacaoParams, DemandaStatus } from '../renderer/src/types/ipc'
 import { Logger, type LogLevel } from './logging'
 import { Scheduler } from './external/Scheduler'
+import yaml from 'js-yaml'
+
+interface ExternalJiraSnapshot {
+  sprintAtual?: { nome: string; id: number } | null
+  issuesAbertas: number
+  issuesFechadasSprint: number
+  storyPointsSprint: number
+  workloadScore: 'alto' | 'medio' | 'baixo'
+  bugsAtivos: number
+  blockersAtivos: Array<{ key: string; summary: string }>
+  tempoMedioCicloDias: number
+}
+
+interface ExternalGitHubSnapshot {
+  commits30d: number
+  commitsPorSemana: number
+  prsMerged30d: number
+  prsAbertos: number
+  prsRevisados: number
+  tempoMedioAbertoDias: number
+  tempoMedioReviewDias: number
+  tamanhoMedioPR: { additions: number; deletions: number }
+}
+
+interface ExternalCrossInsight {
+  tipo: string
+  severidade: 'alta' | 'media' | 'baixa'
+  descricao: string
+  evidencia?: string
+  acaoSugerida?: string
+}
+
+interface ExternalDataSnapshot {
+  atualizadoEm: string
+  jira: ExternalJiraSnapshot | null
+  github: ExternalGitHubSnapshot | null
+  insights: ExternalCrossInsight[]
+}
+
+function validateExternalSnapshot(data: unknown): ExternalDataSnapshot | null {
+  if (!data || typeof data !== 'object') return null
+  const d = data as Record<string, unknown>
+  if (typeof d.atualizadoEm !== 'string') return null
+  return {
+    atualizadoEm: d.atualizadoEm,
+    jira: (d.jira && typeof d.jira === 'object') ? d.jira as ExternalDataSnapshot['jira'] : null,
+    github: (d.github && typeof d.github === 'object') ? d.github as ExternalDataSnapshot['github'] : null,
+    insights: Array.isArray(d.insights) ? d.insights as ExternalDataSnapshot['insights'] : [],
+  }
+}
 
 const APP_ICON = app.isPackaged
   ? join(process.resourcesPath, 'Logo.png')
@@ -661,12 +711,17 @@ function registerIpcHandlers(): void {
     return scheduler.generateSprintReport()
   })
 
-  ipcMain.handle('external:get-data', async (_event, slug: string) => {
+  ipcMain.handle('external:get-data', async (_event, slug: string): Promise<ExternalDataSnapshot | null> => {
     const { workspacePath } = SettingsManager.load()
     const yamlPath = join(workspacePath, 'pessoas', slug, 'external_data.yaml')
     if (!existsSync(yamlPath)) return null
     try {
-      return readFileSync(yamlPath, 'utf-8')
+      const raw = readFileSync(yamlPath, 'utf-8')
+      const parsed = yaml.load(raw)
+      if (!parsed || typeof parsed !== 'object') return null
+      const doc = parsed as Record<string, unknown>
+      const snapshot = doc.atual ?? doc
+      return validateExternalSnapshot(snapshot)
     } catch {
       return null
     }
