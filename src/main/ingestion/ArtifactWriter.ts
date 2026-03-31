@@ -165,7 +165,8 @@ export class ArtifactWriter {
     }).join('\n') || '- [ ] (sem ações comprometidas)'
     const atencaoLines = result.pontos_de_atencao.map((p) => `- **${today}:** ${p}`).join('\n') || ''
     const elogioLines  = result.elogios_e_conquistas.map((e) => `- **${today}:** ${e}`).join('\n') || ''
-    const temasLines   = result.temas_atualizados.map((t) => `- ${t}`).join('\n') || ''
+    const dedupedTemasNew = this.deduplicateThemes(result.temas_atualizados)
+    const temasLines   = dedupedTemasNew.map((t) => `- ${t}`).join('\n') || ''
 
     return `---
 slug: "${slug}"
@@ -273,8 +274,9 @@ ${SECTION.sinais_terceiros.close}
       updated = this.appendToBlock(updated, 'conquistas', newLines)
     }
 
-    // 6. Replace Temas Recorrentes (deduped list)
-    const temasLines = result.temas_atualizados.map((t) => `- ${t}`).join('\n')
+    // 6. Replace Temas Recorrentes (fuzzy deduped list)
+    const dedupedTemas = this.deduplicateThemes(result.temas_atualizados)
+    const temasLines = dedupedTemas.map((t) => `- ${t}`).join('\n')
     updated = this.replaceBlock(updated, 'temas', temasLines)
 
     // 7. Append Histórico de Artefatos
@@ -569,7 +571,7 @@ ${SECTION.sinais_terceiros.close}
         .split('\n')
         .map((l) => l.replace(/^-\s*/, '').trim())
         .filter(Boolean)
-      const merged = [...new Set([...currentTemas, ...newTemas])]
+      const merged = this.deduplicateThemes([...currentTemas, ...newTemas])
       const temasLines = merged.map((t) => `- ${t}`).join('\n')
       updated = this.replaceBlock(updated, 'temas', temasLines)
     }
@@ -710,6 +712,60 @@ ${SECTION.sinais_terceiros.close}
     }
 
     return content.replace(/^---\n[\s\S]*?\n---/, `---\n${fm}\n---`)
+  }
+
+  /**
+   * Normalizes a theme string for comparison: lowercase, no accents, trimmed.
+   */
+  private normalizeForComparison(tema: string): string {
+    return tema
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim()
+  }
+
+  /**
+   * Deduplicates themes using normalized substring matching.
+   * When two themes overlap (one contains the other after normalization),
+   * only the LONGER (more specific) original label survives.
+   * Preserves original labels with accents.
+   */
+  private deduplicateThemes(themes: string[]): string[] {
+    const result: { original: string; normalized: string }[] = []
+
+    for (const tema of themes) {
+      const normalized = this.normalizeForComparison(tema)
+      if (!normalized) continue
+
+      let dominated = false
+      let dominatesIndex = -1
+
+      for (let i = 0; i < result.length; i++) {
+        const existing = result[i]
+        if (existing.normalized.includes(normalized)) {
+          // Existing is more specific (longer includes shorter) — skip new
+          dominated = true
+          break
+        }
+        if (normalized.includes(existing.normalized)) {
+          // New is more specific — will replace existing
+          dominatesIndex = i
+          break
+        }
+      }
+
+      if (dominated) continue
+
+      if (dominatesIndex >= 0) {
+        // Replace the less specific theme with the more specific one
+        result[dominatesIndex] = { original: tema, normalized }
+      } else {
+        result.push({ original: tema, normalized })
+      }
+    }
+
+    return result.map((r) => r.original)
   }
 
   private extractBlock(content: string, blockKey: keyof typeof SECTION): string {
