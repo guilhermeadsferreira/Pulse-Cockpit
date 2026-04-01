@@ -80,6 +80,46 @@ export class ActionRegistry {
   }
 
   /**
+   * Retorna acoes do gestor vencidas que potencialmente bloqueiam acoes do liderado.
+   * Usado pelo TeamRiskPanel e pela pauta para alertar escalation.
+   */
+  getEscalations(slug: string, thresholdDays = 14): Array<{
+    gestorAction: Action
+    diasPendente: number
+    relatedLideradoActions: Action[]
+  }> {
+    const actions = this.list(slug)
+    const today = Date.now()
+    const escalations: Array<{
+      gestorAction: Action
+      diasPendente: number
+      relatedLideradoActions: Action[]
+    }> = []
+
+    const gestorOpen = actions.filter(a => a.owner === 'gestor' && (a.status === 'open' || a.status === 'in_progress'))
+    const lideradoOpen = actions.filter(a => a.owner === 'liderado' && (a.status === 'open' || a.status === 'in_progress'))
+
+    for (const ga of gestorOpen) {
+      const dias = Math.floor((today - new Date(ga.criadoEm).getTime()) / 86_400_000)
+      if (dias < thresholdDays) continue
+
+      // Buscar acoes do liderado que podem estar bloqueadas (mesma fonte ou tema similar)
+      const related = lideradoOpen.filter(la => {
+        if (ga.fonteArtefato && la.fonteArtefato && ga.fonteArtefato === la.fonteArtefato) return true
+        // Substring match simples no texto
+        const gaDesc = (ga.descricao ?? ga.texto).toLowerCase()
+        const laDesc = (la.descricao ?? la.texto).toLowerCase()
+        const gaWords = gaDesc.split(/\s+/).filter(w => w.length > 4)
+        return gaWords.some(w => laDesc.includes(w))
+      })
+
+      escalations.push({ gestorAction: ga, diasPendente: dias, relatedLideradoActions: related })
+    }
+
+    return escalations
+  }
+
+  /**
    * Returns open actions for a person, optionally filtered by owner.
    * Used by Pass de 1:1 to serialize context for follow-up analysis.
    */
@@ -221,6 +261,14 @@ export class ActionRegistry {
     if (newActions.length > 0) {
       this.write(slug, [...newActions, ...existing])
     }
+  }
+
+  /**
+   * Persists a full list of actions for a person, replacing current state.
+   * Use this when you have already mutated objects from list() in memory.
+   */
+  saveAll(slug: string, actions: Action[]): void {
+    this.write(slug, actions)
   }
 
   private appendHistory(action: Action, newStatus: ActionStatus, source: ActionStatusHistoryEntry['source']): void {

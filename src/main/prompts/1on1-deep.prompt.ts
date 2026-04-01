@@ -61,6 +61,12 @@ export interface OneOnOnePdiUpdate {
   progresso_observado: string | null
 }
 
+export interface OneOnOnePrioridadeAtualizada {
+  acao_id: string
+  nova_prioridade: 'baixa' | 'media' | 'alta'
+  motivo: string
+}
+
 export interface OneOnOneResult {
   followup_acoes: OneOnOneFollowup[]
   acoes_liderado: OneOnOneAcaoLiderado[]
@@ -73,6 +79,7 @@ export interface OneOnOneResult {
   pdi_update: OneOnOnePdiUpdate
   resumo_executivo_rh: string
   auto_percepcao?: 'alinhada_com_feedback' | 'cega' | 'inflacionada_positivamente' | null
+  prioridade_atualizada: OneOnOnePrioridadeAtualizada[]
 }
 
 export function build1on1DeepPrompt(params: OneOnOneDeepPromptParams): string {
@@ -196,6 +203,12 @@ Compare o conteúdo do 1:1 com os sinais de terceiros fornecidos acima.
 - "novo_objetivo_sugerido": se um novo objetivo de PDI foi sugerido, descreva. null se não
 - "progresso_observado": evidência concreta de progresso em algum objetivo. null se nenhuma
 
+**"prioridade_atualizada"** — Atualizacao de prioridade das acoes abertas:
+Analise as acoes abertas fornecidas. Se o contexto do 1:1 revela urgencia nova (prazo apertado, bloqueio, pedido explicito) ou reduz urgencia (ja resolvido parcialmente, contexto mudou), inclua em prioridade_atualizada.
+
+## Prioridade de acoes
+Analise as acoes abertas fornecidas. Se o contexto do 1:1 revela urgencia nova (prazo apertado, bloqueio, pedido explicito) ou reduz urgencia (ja resolvido parcialmente, contexto mudou), inclua em prioridade_atualizada. Retorne array vazio se nenhuma mudanca necessaria.
+
 **"auto_percepcao"** — Como o liderado se vê em relação ao feedback que recebe:
 Avalie com base no que o liderado disse sobre seu próprio desempenho, comparando com o que o gestor observa (histórico do perfil, ações abertas, sinais de terceiros):
 - "alinhada_com_feedback": o liderado reconhece pontos de melhoria e conquistas de forma consistente com o que o gestor observa
@@ -248,6 +261,13 @@ JSON esperado:
     "progresso_observado": "string ou null"
   },
   "resumo_executivo_rh": "string",
-  "auto_percepcao": "alinhada_com_feedback|cega|inflacionada_positivamente|null"
+  "auto_percepcao": "alinhada_com_feedback|cega|inflacionada_positivamente|null",
+  "prioridade_atualizada": [
+    {
+      "acao_id": "id da acao existente",
+      "nova_prioridade": "baixa | media | alta",
+      "motivo": "razao para mudar prioridade baseada no contexto do 1:1"
+    }
+  ]
 }`
 }

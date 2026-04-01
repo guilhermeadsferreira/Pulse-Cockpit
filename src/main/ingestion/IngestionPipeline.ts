@@ -697,6 +697,30 @@ export class IngestionPipeline {
         actionReg.createFrom1on1Result(slug, oneOnOneResult, date, artifactFileName)
       }
 
+      // Apply priority updates from deep pass
+      if (oneOnOneResult.prioridade_atualizada?.length > 0) {
+        const currentActions = actionReg.list(slug)
+        let prioChanged = false
+        for (const prio of oneOnOneResult.prioridade_atualizada) {
+          const action = currentActions.find(a => a.id === prio.acao_id)
+          if (action && action.prioridade !== prio.nova_prioridade) {
+            const de = action.prioridade
+            action.prioridade = prio.nova_prioridade
+            prioChanged = true
+            this.log.info('prioridade atualizada via deep pass', {
+              slug,
+              actionId: prio.acao_id,
+              de,
+              para: prio.nova_prioridade,
+              motivo: prio.motivo,
+            })
+          }
+        }
+        if (prioChanged) {
+          actionReg.saveAll(slug, currentActions)
+        }
+      }
+
       // 4. Persist PDI updates from 1on1 analysis to config.yaml
       if (oneOnOneResult.pdi_update?.houve_mencao_pdi) {
         try {
