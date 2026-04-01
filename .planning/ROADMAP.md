@@ -110,6 +110,7 @@ V2.1 está completo quando:
 | 1. PersonView Intelligence | 0/2 | Not started | - |
 | 2. Settings Reingest UX | 0/2 | Not started | - |
 | 3. Enriched Prompts | 0/2 | Not started | - |
+| 04. Action System UX Avancado | 3/5 | In progress | - |
 
 ---
 
