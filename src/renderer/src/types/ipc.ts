@@ -74,6 +74,7 @@ export interface PDIItem {
   objetivo: string
   status:   PDIStatus
   prazo?:   string
+  evidencias?: string[]   // Evidencias cumulativas de multiplos artefatos
 }
 
 export interface PersonConfig {
