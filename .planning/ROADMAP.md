@@ -157,3 +157,13 @@ Plans:
 
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
+
+### Phase 999.7: Perfil vivo sensibilizado pelo daily report (BACKLOG)
+
+**Goal:** O daily report deve atualizar o perfil vivo de forma determinística — não apenas gerar relatório descartável. Cada execução do daily deve persistir no perfil: histórico do ciclo do liderado, evolução ao longo do tempo, momento atual (bloqueios, velocity, carga), pontos de atenção emergentes, métricas consolidadas (Jira + Git) e tendências. O gestor abre o perfil e vê um retrato atualizado e rastreável — não precisa ler relatórios avulsos para entender onde cada pessoa está.
+**Requirements:** TBD
+**Plans:** 0 plans
+**Note:** Hoje o DailyReportGenerator gera relatório mas não persiste dados estruturados no perfil.md. Requer definir quais campos do perfil serão atualizados e como manter histórico sem poluir o arquivo.
+
+Plans:
+- [ ] TBD (promote with /gsd:review-backlog when ready)
