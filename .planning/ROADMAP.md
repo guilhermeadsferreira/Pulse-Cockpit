@@ -167,3 +167,13 @@ Plans:
 
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
+
+### Phase 999.8: Visão de PRs abertas com status de revisão (BACKLOG)
+
+**Goal:** Painel mostrando todas as PRs abertas do time com: tempo aberta, status de revisão (sem revisão / aguardando correção / aprovada aguardando merge), quem é o autor, quem revisou (ou não). O gestor identifica rapidamente PRs travadas — sem review há X dias, ou com changes requested sem resposta — e pode agir antes de virar bloqueio.
+**Requirements:** TBD
+**Plans:** 0 plans
+**Note:** GitHubClient já busca PRs. Falta: (1) tracking de estado de review por PR, (2) cálculo de aging, (3) UI de listagem com filtros. Pode ser parte do dashboard 999.6 ou view independente.
+
+Plans:
+- [ ] TBD (promote with /gsd:review-backlog when ready)
