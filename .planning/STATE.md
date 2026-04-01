@@ -24,7 +24,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Milestone:** V2.1 — Completar camada UI e prompts da V2
 **Active phase:** Phase 04 — action-system-ux-avancado (in progress)
-**Last action:** Completed 04-01 + 04-03 (Wave 1 in progress)
+**Last action:** Completed 04-01 + 04-03 + 04-05 (Wave 1 complete)
 
 ## Decisions
 
@@ -54,6 +54,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 03]: Narrative context construido a partir de PersonConfig sem ler perfil.md
 - [Phase 04-03]: Evidence accumulation both from 1:1 deep pass and ceremony signals for broader PDI coverage
 - [Phase 04-03]: Fuzzy matching for PDI objectives using first 3 words of each side
+- [Phase 04-05]: Dynamic import no Scheduler para evitar circular dependency com index.ts
+- [Phase 04-05]: generateAgendaForPerson carrega settings internamente para obter openRouter config
 
 ## Phases
 
@@ -63,11 +65,10 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | 999.3 | Ingestion Performance Hybrid Model | ✅ Done |
 | 999.4 | OpenRouter Estágio 2 — Pass 1 modelo leve | ✅ Done |
 | 999.5 | Gemini Preprocessing Pass | ✅ Done |
-| 04 | Action System + UX Avancado | 🔄 In Progress (1/5 plans) |
-| 1 | PersonView Intelligence | ⬜ Pending |
-| 2 | Settings Reingest UX | ⬜ Pending |
-| 3 | Enriched Prompts | ⬜ Pending |
-| 04 | Action System UX Avancado | 🔄 In Progress |
+| 01 | Prompt Refinements | ✅ Done |
+| 02 | Pipeline & Schema | ✅ Done |
+| 03 | GitHub Metrics & CrossAnalyzer | ✅ Done |
+| 04 | Action System + UX Avancado | 🔄 In Progress (3/5 plans) |
 
 ## Planning Artifacts
 
@@ -89,7 +90,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 03 P03 | 167 | 2 tasks | 5 files |
 | 04 | 01 | 2min | 2/2 | 3 |
 | 04 | 03 | 3min | 1/1 | 2 |
+| 04 | 05 | 140s | 1/1 | 2 |
 
 ## Next Action
 
-Phase 04 Wave 1 in progress. Plans 01, 03 complete. Merging 05 next, then Wave 2.
+Phase 04 Wave 1 complete (plans 01, 03, 05). Executing Wave 2 (plans 02, 04).
