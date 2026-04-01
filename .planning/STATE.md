@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Executing
-last_updated: "2026-04-01T01:27:45.829Z"
+status: Executing Phase 03
+last_updated: "2026-04-01T01:23:16.807Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 10
-  completed_plans: 8
+  completed_plans: 7
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -18,7 +18,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Core value:** O contexto acumulado ao longo do ciclo deve estar acessível para o gestor na hora que importa: na tela do perfil, na pauta e no relatório de calibração.
-**Current focus:** Phase 02 — pipeline-schema
+**Current focus:** Phase 03 — github-metrics-crossanalyzer
 
 ## Current Status
 
@@ -44,7 +44,6 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 02]: Substring match bidirecional para dedup de temas — mais especifico sobrevive
 - [Phase 02]: Health history threshold 50 entradas com compressao mensal automatica
 - [Phase 02]: Tipos ExternalDataSnapshot definidos localmente no main process index.ts — evita dependencia cross-process
-- [Phase 03]: ProfileContext extraido de notas_manuais e ultimas 5 linhas de Notas do perfil.md para deteccao de ausencia
 
 ## Phases
 
@@ -74,7 +73,6 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 01 P02 | 5 | 2 tasks | 1 files |
 | Phase 02 P01 | 12min | 2 tasks | 1 files |
 | Phase 02 P02 | 741 | 1 tasks | 2 files |
-| Phase 03 P02 | 147s | 1 tasks | 2 files |
 
 ## Next Action
 
