@@ -1,7 +1,7 @@
 # Backlog — Pulse Cockpit
 
 > Gerado a partir da auditoria técnica em 2026-03-19.
-> Última atualização: 2026-03-31 (revisão extensiva — loops, prompts, métricas, UX)
+> Última atualização: 2026-04-01 (DAILY-AUDIT — revisão de qualidade do Daily Report)
 
 ---
 
@@ -905,5 +905,138 @@ Ações tab não exibe `contexto` (V2 field). Informação existe mas escondida.
 ### T-R10.9 — Batch reingest exposto na UI
 IPC `ingestion:batchReingest` existe mas sem superfície. Útil para re-processar com prompts novos.
 - [ ] Botão em Settings: "Reprocessar todos os artefatos" com confirmação
+
+---
+
+## DAILY-AUDIT — Revisão de Qualidade do Daily Report (2026-04-01)
+
+> Identificados na revisão do Daily Report de 01/04/2026 como usuário/gestor.
+> Foco: legibilidade, acionabilidade e contexto das métricas apresentadas.
+
+### DAILY-AUDIT-1 — TL;DR executivo no topo do report
+**Arquivo:** `src/main/external/DailyReportGenerator.ts`
+**O que falta:** O report abre direto com a tabela da sprint. Falta um resumo de 2-3 linhas no topo com: % progresso, quantidade de bloqueios, pessoas sem atividade, e a ação principal do dia.
+**Esforço:** baixo (gerar bloco de texto a partir dos dados já calculados)
+
+**Critério de aceite:**
+- [ ] Report abre com bloco "TL;DR" antes da tabela de sprint
+- [ ] Resumo menciona % progresso, bloqueios ativos e ação recomendada
+- [ ] Leitura em <10 segundos para entender o estado do time
+
+---
+
+### DAILY-AUDIT-2 — Contexto temporal da sprint (dia X de Y + % esperado vs. real)
+**Arquivo:** `src/main/external/DailyReportGenerator.ts`
+**O que falta:** O header mostra "6/43 issues concluídas | 3/75 SP entregues" mas sem contexto de onde estamos na sprint. Sem saber se é dia 1 ou dia 8, os números não dizem nada.
+**Esforço:** baixo (dados de startDate/endDate da sprint já vêm do Jira)
+
+**Critério de aceite:**
+- [ ] Header mostra "Dia X de Y" da sprint
+- [ ] Mostra % esperado (linear) vs. % real de entrega
+- [ ] Gestor consegue avaliar se o time está on track ou atrasado
+
+---
+
+### DAILY-AUDIT-3 — Deduplicar reviews repetidos no report
+**Arquivo:** `src/main/external/DailyReportGenerator.ts` (seção de atividade GitHub)
+**O que falta:** Reviews do mesmo autor na mesma PR aparecem duplicados (ex: Kelvin com 3 blocos idênticos na PR #144). Pipeline não deduplica por PR.
+**Esforço:** baixo (agrupar reviews por PR antes de renderizar)
+
+**Critério de aceite:**
+- [ ] Múltiplos comments na mesma PR aparecem como 1 entrada com N comentários
+- [ ] Comentários individuais listados como sub-itens, sem repetição do header
+
+---
+
+### DAILY-AUDIT-4 — Usar nomes curtos das pessoas
+**Arquivo:** `src/main/external/DailyReportGenerator.ts`
+**O que falta:** Nomes completos (ex: "Fernando Henrique Chimicoviaki do Nascimento") poluem a leitura. Deveria usar o campo `nome` do registro da pessoa ou primeiro + último nome.
+**Esforço:** baixo (usar campo `nome` do PersonRegistry ou truncar)
+
+**Critério de aceite:**
+- [ ] Nenhum nome com mais de ~25 caracteres no report
+- [ ] Usa nome do perfil (`pessoa.nome`) se disponível, senão primeiro + último nome
+
+---
+
+### DAILY-AUDIT-5 — Cruzar impedimentos Jira vs. sinais de bloqueio da IA
+**Arquivo:** `src/main/external/DailyReportGenerator.ts` (seção Impedimentos por pessoa)
+**O que falta:** Quando a IA detecta sinais de bloqueio (sem atividade + tasks em andamento) mas a pessoa não flagou impedimento no Jira, a seção "Impedimentos" mostra "Nenhum impedimento" — contradiz o alerta. Deveria sinalizar a inconsistência.
+**Esforço:** baixo-médio (cruzar alertas gerados com impedimentos Jira)
+
+**Critério de aceite:**
+- [ ] Se alerta de "bloqueio silencioso" foi gerado, seção de impedimentos mostra nota: "⚠️ Sem impedimento no Jira, mas sinais de bloqueio detectados — verificar"
+- [ ] Seção "Nenhum impedimento" só aparece quando de fato não há sinais
+
+---
+
+### DAILY-AUDIT-6 — Clarificar "Nenhum avanço registrado"
+**Arquivo:** `src/main/external/DailyReportGenerator.ts` (seção "O que avançou")
+**O que falta:** "Nenhum avanço registrado" é vago quando a pessoa teve atividade (commits/reviews). Deveria explicitar que houve atividade mas nenhuma task mudou de status no Jira.
+**Esforço:** baixo (condicionar mensagem à existência de atividade)
+
+**Critério de aceite:**
+- [ ] Se pessoa teve atividade GitHub mas nenhuma task moveu no Jira: "Atividade em código/reviews mas nenhuma task mudou de status"
+- [ ] Se pessoa não teve nenhuma atividade: "Sem atividade registrada"
+
+---
+
+### DAILY-AUDIT-7 — Explicar quando SP conta como "done"
+**Arquivo:** `src/main/external/DailyReportGenerator.ts` (tabela de sprint)
+**O que falta:** Tabela mostra "0 SP done" para quem mergou PRs. SP só conta quando issue fecha no Jira? Se sim, precisa de nota explicativa. Caso contrário, parece que ninguém entrega.
+**Esforço:** baixo (adicionar footnote ou tooltip textual)
+
+**Critério de aceite:**
+- [ ] Tabela de sprint tem nota explicativa sobre critério de contagem de SP (ex: "SP contabilizados quando issue atinge status Done no Jira")
+- [ ] Gestor não confunde "0 SP" com "nada entregue" quando há PRs merged
+
+---
+
+### DAILY-AUDIT-8 — Cycle time médio como baseline no Daily Report
+**Arquivo:** `src/main/external/DailyReportGenerator.ts`
+**O que falta:** Dados de cycle time histórico já existem em `external_data.yaml` (via `computeBaseline3Months`) e o cálculo por task já funciona (`enrichWithCycleTime`). Falta conectar: carregar baseline histórica e exibir comparativo por task + seção de métricas de fluxo do time.
+**Esforço:** médio (carregar baseline + agregar time + adicionar seção + comparativo por task)
+
+**Dependências:**
+- `ExternalDataPass.computeBaseline3Months(slug)` — já existe
+- `JiraMetrics.computeCycleTimeByStage()` — já existe
+- `DailyReportGenerator.enrichWithCycleTime()` — já existe
+
+**Critério de aceite:**
+- [ ] Seção "Métricas de Fluxo" no topo com cycle time médio do time (3 meses) vs. sprint atual
+- [ ] Tasks individuais mostram comparativo: "há 16d (média pessoal: 6d | média time: 4d)"
+- [ ] Baseline calculada a partir de `external_data.yaml` histórico, não hardcoded
+
+---
+
+### DAILY-AUDIT-9 — 🐛 Bug: `categorizeStatus` classifica "Ready For Dev" como dev
+**Arquivo:** `src/main/external/DailyReportGenerator.ts` (`categorizeStatus`)
+**Tipo:** Bug
+**O que acontece:** O matching de status provavelmente faz substring match (`.includes('dev')`), e "Ready For Dev" contém "dev". Resultado: tasks em fila são contadas como ativas. Isso causa dois efeitos visíveis:
+1. **WIP alert falso positivo:** Antonio aparece com "5 tasks em desenvolvimento" quando só 1 está em Dev — as outras 4 estão em Ready For Dev (fila)
+2. **"Trabalhando agora" mistura fila com trabalho ativo:** Tasks Ready For Dev aparecem junto com tasks realmente em Dev, confundindo o gestor sobre o que está sendo trabalhado vs. o que está no backlog atribuído
+
+**Correção:** Usar match exato (igualdade) em vez de substring, ou adicionar "ready for dev" / "ready" à lista de statuses de fila (QUEUE_STATUSES).
+
+**Esforço:** baixo (fix pontual no matching + testar com dados reais)
+
+**Critério de aceite:**
+- [ ] Tasks "Ready For Dev" NÃO contam no alerta de WIP
+- [ ] Tasks "Ready For Dev" NÃO aparecem em "Trabalhando agora"
+- [ ] Considerar seção separada "Na fila" para tasks atribuídas mas não iniciadas
+- [ ] WIP alert reflete apenas tasks realmente em Dev ou Review
+
+---
+
+### DAILY-AUDIT-10 — Diferenciar commits, PRs e reviews na seção "O que fez ontem"
+**Arquivo:** `src/main/external/DailyReportGenerator.ts` (seção de atividade GitHub)
+**O que falta:** Commits aparecem como `🔨 repo: commit message` — sem deixar claro que é um commit e não uma PR. Para o gestor, "updating selfie endpoint" parece uma PR aberta, mas é só um commit. Labels ambíguos geram dúvida.
+**Esforço:** baixo (ajustar labels/ícones por tipo de atividade)
+
+**Critério de aceite:**
+- [ ] Commits claramente identificados (ex: `💻 Commit em repo: message` ou label "commit")
+- [ ] PRs abertas/merged com label diferente (ex: `🔀 PR #123 em repo: title`)
+- [ ] Reviews mantêm `👀` (já funciona bem)
+- [ ] Gestor consegue distinguir os 3 tipos de atividade sem ambiguidade
 
 ---

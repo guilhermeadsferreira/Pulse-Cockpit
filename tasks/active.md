@@ -1,74 +1,51 @@
 # Active — Pulse Cockpit
 
 > Última atualização: 2026-04-01
-
-## E6 — Daily Report: próximos passos
-
-- [ ] T6.2 — PR aberto sem review (alerta de PR open >2 dias sem reviewer)
-- [ ] T6.3 — Cycle time por pessoa (média) no Sprint Report
-- [ ] T6.4 — Lead time do time no Weekly Report
-- [ ] T6.5 — Velocity trend no Monthly Report
+> Auditoria: 31/38 tasks movidas para done.md — sobraram 7 items reais.
+> DAILY-AUDIT: 10/10 tasks implementadas (2026-04-01)
 
 ---
 
-## Wave 1 — Prompt Refinements (em andamento)
+## Pendentes
 
-### 1a — ingestion.prompt.ts
-- [ ] T-R6.2 — `pessoas_esperadas_ausentes`: novo campo no prompt + IngestionAIResult
-- [ ] T-R6.4 — Early stagnation 0-3 meses: instrução explícita de janela mínima
+### T-R6.19 — Evidências nunca triviais
+**Prompts afetados:** todos que geram evidências (ingestion, 1on1-deep, cerimonia-sinal, cycle)
+**O que falta:** guard explícito rejeitando evidências triviais como "participou da reunião" ou "disse algo"
+**Esforço:** baixo (adicionar instrução em 3-4 prompts)
 
-### 1b — 1on1-deep.prompt.ts + IngestionPipeline
-- [ ] T-R6.9 — Guard tendência "deteriorando": requer 2+ entradas de 1:1 no histórico
+### T6.3 — Cycle time por pessoa (média) no Sprint Report
+**Arquivo:** `src/main/reports/SprintReportGenerator.ts`
+**O que falta:** dados existem em `JiraMetrics.tempoMedioCicloDias` mas não são expostos na tabela por pessoa do sprint report
+**Esforço:** baixo (puxar campo existente para o template)
 
-### 1c — cerimonia-sinal.prompt.ts
-- [ ] T-R6.11 — Participação mínima por tipo de cerimônia (daily / planning / retro / review)
-- [ ] T-R6.14 — Saúde calibrada por cargo/nível
+### T6.4 — Lead time do time no Weekly Report
+**Arquivo:** `src/main/reports/WeeklyReportGenerator.ts`
+**O que falta:** métrica de lead time não existe no sistema — precisa definir cálculo (ex: tempo entre issue created → done) e agregar por time
+**Esforço:** médio (definir métrica + implementar + expor no report)
 
-### 1d — compression.prompt.ts
-- [ ] T-R6.20 — Harmonizar definição de "ponto resolvido" (duas abordagens → uma)
-- [ ] T-R6.21 — Conquistas: formato obrigatório "título — outcome"
-
-### 1e — Prompts restantes (cycle, autoavaliação, gemini, gestor-ciclo)
-- [ ] T-R6.17 — `linha_do_tempo` flexível (5-10 itens)
-- [ ] T-R6.18 — Expectativas benchmarked por cargo
-- [ ] T-R6.19 — Evidências nunca triviais
-- [ ] T-R6.23 — Valores calibrados por cargo (autoavaliação)
-- [ ] T-R6.24 — Desafios reconhecidos como campo (autoavaliação)
-- [ ] T-R6.25 — Gemini: mode por conteúdo
-- [ ] T-R6.26 — Gemini: emotional content em full mode
-- [ ] T-R6.27 — Gemini: speaker confidence
-- [ ] T-R6.28 — Gestor-ciclo: decisão = trade-off explícito
-- [ ] T-R6.29 — Gestor-ciclo: aprendizado obrigatório
+### T6.5 — Velocity trend no Monthly Report
+**Arquivo:** `src/main/reports/MonthlyReportGenerator.ts`
+**O que falta:** comparação de velocity entre sprints/meses — story points entregues já existem por pessoa/sprint mas não são trendados
+**Esforço:** médio (agregar histórico + calcular trend + expor no report)
 
 ---
 
-## Wave 2 — Pipeline e Schema
+## Parciais
 
-- [ ] T-R7.3 — Temas: deduplicação fuzzy (substring/keyword merge)
-- [ ] T-R7.4 — Health history cleanup: manter últimas 50 entradas
-- [ ] T-R10.4 — External data IPC: validação de schema no retorno
+### T6.2 — PR sem reviewer (alerta específico)
+**Arquivo:** `src/main/external/CrossAnalyzer.ts`
+**Estado:** alerta de PR acumulado existe (`prsAbertos >= 2 && tempoMedioAbertoDias >= 3`), mas não distingue "PR sem nenhum reviewer atribuído" vs "PR aguardando review"
+**O que falta:** checar se PR tem 0 reviewers no GitHub e alertar especificamente
+**Esforço:** baixo-médio (precisa de campo adicional do GitHub API)
 
----
+### T-R10.4 — Schema validation no retorno de dados externos
+**Arquivo:** `src/main/external/ExternalDataPass.ts`
+**Estado:** validação existe no ingestion (SchemaValidator), mas dados externos retornam com graceful degradation sem validação explícita
+**O que falta:** validação Zod/manual no retorno dos IPCs de dados externos
+**Esforço:** baixo
 
-## Wave 3 — GitHub Metrics + CrossAnalyzer
-
-- [ ] T-R8.1 — Code review depth (avgCommentsPerReview, expertiseSignals)
-- [ ] T-R8.2 — Collaboration score (0-100)
-- [ ] T-R8.3 — Test coverage trend per PR
-- [ ] T-R8.4 — CrossAnalyzer: campo `causa_raiz` nos insights
-- [ ] T-R8.5 — Desalinhamento perfil vs dados externos
-- [ ] T-R8.6 — Relatórios: narrative context paragraph
-- [ ] T-R8.7 — Baseline comparison pessoal (últimos 3 meses)
-
----
-
-## Wave 4 — UX Avançado + Action System + Pipeline
-
-- [ ] T-R10.2 — Risk panel para pares e gestores
-- [ ] T-R9.2 — Escalation: ação vencida do gestor → follow-up para liderado
-- [ ] T-R9.3 — Action audit trail: `statusHistory[]`
-- [ ] T-R9.4 — Prioridade de ações atualizada pelo deep pass
-- [ ] T-R9.5 — Evidence aggregation para PDI
-- [ ] T-R5.2 — Sync bidirecional ações ↔ Jira
-- [ ] T-R5.3 — Insights cross-team (padrões em múltiplos perfis)
-- [ ] T-R10.5 — Agenda generation agendada (pré-1:1 automático)
+### T-R5.2 — Sync bidirecional ações ↔ Jira
+**Arquivo:** `src/main/external/ExternalDataPass.ts`
+**Estado:** sync unidirecional implementado (fecha ações quando Jira→Done)
+**O que falta:** direção inversa — criar ações a partir de issues Jira atribuídas
+**Esforço:** médio-alto (design de quais issues viram ações + dedup + UX)

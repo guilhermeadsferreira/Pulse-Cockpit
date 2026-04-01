@@ -336,6 +336,29 @@ export class ExternalDataPass {
     }
   }
 
+  /**
+   * Computes the average cycle time (days) over the last 3 months of history.
+   * Returns null if no historical cycle time data is available.
+   */
+  computeCycleTimeBaseline(slug: string): number | null {
+    const historico = this.loadHistorico(slug)
+    if (!historico) return null
+
+    const months = Object.keys(historico).sort().reverse().slice(0, 3)
+    let total = 0
+    let count = 0
+
+    for (const key of months) {
+      const ct = historico[key].jira?.tempoMedioCicloDias
+      if (ct != null && ct > 0) {
+        total += ct
+        count++
+      }
+    }
+
+    return count > 0 ? Math.round((total / count) * 10) / 10 : null
+  }
+
   // ── Jira Action Sync ───────────────────────────────────────────
 
   private async syncActionsWithJira(

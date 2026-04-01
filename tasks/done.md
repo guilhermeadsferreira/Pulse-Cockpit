@@ -2,6 +2,84 @@
 
 > Última atualização: 2026-04-01
 
+## DAILY-AUDIT — 10 melhorias no Daily Report ✓ (2026-04-01)
+
+> Revisão do Daily Report como usuário/gestor identificou 1 bug + 9 melhorias.
+
+- **DAILY-AUDIT-1** ✅ TL;DR executivo no topo do report
+- **DAILY-AUDIT-2** ✅ Contexto temporal da sprint (dia X de Y + % esperado vs real)
+- **DAILY-AUDIT-3** ✅ Deduplicar reviews repetidos por PR
+- **DAILY-AUDIT-4** ✅ Nomes curtos das pessoas (primeiro + último)
+- **DAILY-AUDIT-5** ✅ Cruzar impedimentos Jira vs sinais de bloqueio da IA
+- **DAILY-AUDIT-6** ✅ Clarificar "Nenhum avanço registrado" quando há atividade GitHub
+- **DAILY-AUDIT-7** ✅ Footnote explicando critério de SP done
+- **DAILY-AUDIT-8** ✅ Cycle time médio como baseline (seção Métricas de Fluxo + comparativo por task)
+- **DAILY-AUDIT-9** ✅ Bug fix: `categorizeStatus` classificava "Ready For Dev" como dev (QUEUE_PATTERNS)
+- **DAILY-AUDIT-10** ✅ Ícones distintos para commits (💻), PRs merged (🔀) e reviews (👀)
+
+**Arquivos alterados:** `DailyReportGenerator.ts`, `ExternalDataPass.ts`
+
+---
+
+## Auditoria de active.md — 31 tasks já implementadas ✓ (2026-04-01)
+
+> Cruzamento do active.md com o codebase revelou que 31/38 tasks estavam implementadas mas nunca fechadas.
+
+### Wave 1 — Prompt Refinements (16/17 feitas)
+
+**1a — ingestion.prompt.ts:**
+- **T-R6.2** ✅ `pessoas_esperadas_ausentes` — campo no IngestionAIResult + regras por tipo de cerimônia
+- **T-R6.4** ✅ Early stagnation 0-3 meses — instrução explícita com janela mínima de 2 artefatos/90 dias
+
+**1b — 1on1-deep.prompt.ts:**
+- **T-R6.9** ✅ Guard "deteriorando" — requer 2+ entradas de 1:1 (`contagem1on1s` passado como parâmetro)
+
+**1c — cerimonia-sinal.prompt.ts:**
+- **T-R6.11** ✅ Participação mínima por tipo (daily/planning/retro/review) com expectativas distintas
+- **T-R6.14** ✅ Saúde calibrada por cargo/nível — bar de "verde" mais alto para sênior/liderança
+
+**1d — compression.prompt.ts:**
+- **T-R6.20** ✅ "Ponto resolvido" harmonizado — 2 critérios explícitos (strikethrough ou pontos_resolvidos)
+- **T-R6.21** ✅ Conquistas formato obrigatório "[TÍTULO] — [OUTCOME]"
+
+**1e — Prompts restantes:**
+- **T-R6.17** ✅ `linha_do_tempo` flexível 5-10 itens
+- **T-R6.18** ✅ Expectativas benchmarked por cargo
+- **T-R6.23** ✅ Valores calibrados por cargo (autoavaliação) — eixos distintos para IC vs gestão
+- **T-R6.24** ✅ Desafios reconhecidos como campo obrigatório (autoavaliação)
+- **T-R6.25** ✅ Gemini mode por conteúdo (3+ speakers → full, 1-2 → light)
+- **T-R6.26** ✅ Gemini emotional content em full mode — "Observações de Tom"
+- **T-R6.27** ✅ Gemini speaker confidence (alta/media/baixa)
+- **T-R6.28** ✅ Gestor-ciclo decisão = trade-off explícito (3 formatos aceitos)
+- **T-R6.29** ✅ Gestor-ciclo aprendizado obrigatório (nunca array vazio)
+
+### Wave 2 — Pipeline e Schema (2/3 feitas)
+
+- **T-R7.3** ✅ Temas deduplicação fuzzy — `deduplicateThemes()` em ArtifactWriter com substring matching
+- **T-R7.4** ✅ Health history cleanup — `compressHealthHistory()` mantém últimas 50, comprime antigas em resumos mensais
+
+### Wave 3 — GitHub Metrics + CrossAnalyzer (7/7 feitas)
+
+- **T-R8.1** ✅ Code review depth — `avgCommentsPerReview`, `firstReviewTurnaroundDias`, `approvalRate`
+- **T-R8.2** ✅ Collaboration score 0-100 — `computeCollaborationScore()` com 3 dimensões
+- **T-R8.3** ✅ Test coverage trend per PR — `computeTestCoverageRatio()` detecta arquivos de teste
+- **T-R8.4** ✅ CrossAnalyzer `causa_raiz` nos insights — 7 valores possíveis
+- **T-R8.5** ✅ Desalinhamento perfil vs dados externos — `analyzeCommunicationGap()` + `analyzeActivityDrop()`
+- **T-R8.6** ✅ Relatórios narrative context — `extractNarrativeContext()` no ExternalDataPass
+- **T-R8.7** ✅ Baseline comparison 3 meses — `computeBaseline3Months()` com médias de commits/PRs/reviews
+
+### Wave 4 — UX + Action System + Pipeline (6/7 feitas)
+
+- **T-R10.2** ✅ Risk panel — DashboardView com escalations e cross-team insights
+- **T-R9.2** ✅ Escalation ações vencidas — `getEscalations()` no ActionRegistry (14+ dias)
+- **T-R9.3** ✅ Action audit trail — `statusHistory[]` com 6 sources possíveis
+- **T-R9.4** ✅ Prioridade atualizada pelo deep pass — `OneOnOnePrioridadeAtualizada[]`
+- **T-R9.5** ✅ Evidence aggregation para PDI — `PDIItem.evidencias[]` + `OneOnOneFollowup.evidencia`
+- **T-R5.3** ✅ Insights cross-team — 7 tipos de padrão detectados em múltiplos perfis
+- **T-R10.5** ✅ Agenda generation agendada — `checkAgendaGeneration()` 2 dias antes do 1:1 esperado
+
+---
+
 ## E6 — Daily Report: Inteligência para o Gestor ✓ (2026-04-01)
 
 > 4 releases (v0.3.1→v0.3.4) transformando daily de dump de dados em ferramenta de decisão.
