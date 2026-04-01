@@ -147,3 +147,13 @@ Plans:
 
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
+
+### Phase 999.6: Dashboard de métricas do time — Git + Jira (BACKLOG)
+
+**Goal:** Dashboard com visão geral do time e drill-down por pessoa, consolidando métricas de Git e Jira: qualidade de PRs (comentários, feedbacks recorrentes), tempo até merge, saúde das entregas (cycle time, blockers), saúde do time (workload balance, burndown) e desempenho individual. Duas perspectivas: visão time (agregada) e visão pessoa (detalhada).
+**Requirements:** TBD
+**Plans:** 0 plans
+**Note:** Parte dos dados já existe no GitHubMetrics e JiraMetrics — falta a camada de agregação por time e a UI de dashboard.
+
+Plans:
+- [ ] TBD (promote with /gsd:review-backlog when ready)
