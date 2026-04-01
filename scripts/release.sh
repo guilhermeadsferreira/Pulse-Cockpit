@@ -2,26 +2,29 @@
 set -euo pipefail
 
 # ─── Pulse Cockpit — Release Script ───────────────────────────────────────────
-# Uso: npm run release -- patch|minor|major
-# Exemplo: npm run release -- patch   → 0.1.0 → 0.1.1
-#          npm run release -- minor   → 0.1.0 → 0.2.0
-#          npm run release -- major   → 0.1.0 → 1.0.0
+# Uso: npm run release -- patch|minor|major [--force]
+# Exemplo: npm run release -- patch          → bump + commit + tag + build + release
+#          npm run release -- minor --force  → pula check de working tree limpo
 
-BUMP="${1:-}"
+FORCE=false
+BUMP=""
+
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=true ;;
+    patch|minor|major) BUMP="$arg" ;;
+    *) echo "Argumento inválido: '$arg'. Use patch|minor|major [--force]."; exit 1 ;;
+  esac
+done
 
 if [[ -z "$BUMP" ]]; then
-  echo "Uso: npm run release -- patch|minor|major"
+  echo "Uso: npm run release -- patch|minor|major [--force]"
   exit 1
 fi
 
-if [[ "$BUMP" != "patch" && "$BUMP" != "minor" && "$BUMP" != "major" ]]; then
-  echo "Tipo inválido: '$BUMP'. Use patch, minor ou major."
-  exit 1
-fi
-
-# ── 1. Garantir working tree limpo ────────────────────────────────────────────
-if [[ -n "$(git status --porcelain)" ]]; then
-  echo "Erro: há mudanças não commitadas. Faça commit antes de fazer release."
+# ── 1. Garantir working tree limpo (skip com --force) ────────────────────────
+if [[ "$FORCE" == false ]] && [[ -n "$(git status --porcelain)" ]]; then
+  echo "Erro: há mudanças não commitadas. Faça commit antes ou use --force."
   git status --short
   exit 1
 fi
