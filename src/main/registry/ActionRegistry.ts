@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
 import yaml from 'js-yaml'
-import type { Action, ActionStatus } from '../../renderer/src/types/ipc'
+import type { Action, ActionStatus, ActionStatusHistoryEntry } from '../../renderer/src/types/ipc'
 import type { AcaoComprometida } from '../prompts/ingestion.prompt'
 import type { OneOnOneResult, OneOnOneFollowup, OneOnOneAcaoLiderado } from '../prompts/1on1-deep.prompt'
 
@@ -56,12 +56,67 @@ export class ActionRegistry {
     let changed = false
     for (const action of actions) {
       if (action.id === id) {
+        this.appendHistory(action, status, 'manual')
         action.status = status
         if (status === 'done') action.concluidoEm = new Date().toISOString().slice(0, 10)
         changed = true
       }
     }
     if (changed) this.write(slug, actions)
+  }
+
+  updateStatusWithSource(slug: string, id: string, status: ActionStatus, source: ActionStatusHistoryEntry['source']): void {
+    const actions = this.list(slug)
+    let changed = false
+    for (const action of actions) {
+      if (action.id === id) {
+        this.appendHistory(action, status, source)
+        action.status = status
+        if (status === 'done') action.concluidoEm = new Date().toISOString().slice(0, 10)
+        changed = true
+      }
+    }
+    if (changed) this.write(slug, actions)
+  }
+
+  /**
+   * Retorna acoes do gestor vencidas que potencialmente bloqueiam acoes do liderado.
+   * Usado pelo TeamRiskPanel e pela pauta para alertar escalation.
+   */
+  getEscalations(slug: string, thresholdDays = 14): Array<{
+    gestorAction: Action
+    diasPendente: number
+    relatedLideradoActions: Action[]
+  }> {
+    const actions = this.list(slug)
+    const today = Date.now()
+    const escalations: Array<{
+      gestorAction: Action
+      diasPendente: number
+      relatedLideradoActions: Action[]
+    }> = []
+
+    const gestorOpen = actions.filter(a => a.owner === 'gestor' && (a.status === 'open' || a.status === 'in_progress'))
+    const lideradoOpen = actions.filter(a => a.owner === 'liderado' && (a.status === 'open' || a.status === 'in_progress'))
+
+    for (const ga of gestorOpen) {
+      const dias = Math.floor((today - new Date(ga.criadoEm).getTime()) / 86_400_000)
+      if (dias < thresholdDays) continue
+
+      // Buscar acoes do liderado que podem estar bloqueadas (mesma fonte ou tema similar)
+      const related = lideradoOpen.filter(la => {
+        if (ga.fonteArtefato && la.fonteArtefato && ga.fonteArtefato === la.fonteArtefato) return true
+        // Substring match simples no texto
+        const gaDesc = (ga.descricao ?? ga.texto).toLowerCase()
+        const laDesc = (la.descricao ?? la.texto).toLowerCase()
+        const gaWords = gaDesc.split(/\s+/).filter(w => w.length > 4)
+        return gaWords.some(w => laDesc.includes(w))
+      })
+
+      escalations.push({ gestorAction: ga, diasPendente: dias, relatedLideradoActions: related })
+    }
+
+    return escalations
   }
 
   /**
@@ -102,6 +157,7 @@ export class ActionRegistry {
         status:           'open' as ActionStatus,
         criadoEm:         date,
         fonteArtefato:    artifactFileName,
+        statusHistory:    [{ status: 'open' as ActionStatus, date, source: 'ingestion' as const }],
       }
     })
 
@@ -130,13 +186,16 @@ export class ActionRegistry {
       if (!action) continue
 
       if (fu.status === 'cumprida') {
+        this.appendHistory(action, 'done', '1on1-deep')
         action.status = 'done'
         action.concluidoEm = new Date().toISOString().slice(0, 10)
         changed = true
       } else if (fu.status === 'em_andamento' && action.status === 'open') {
+        this.appendHistory(action, 'in_progress', '1on1-deep')
         action.status = 'in_progress'
         changed = true
       } else if (fu.status === 'abandonada') {
+        this.appendHistory(action, 'cancelled', '1on1-deep')
         action.status = 'cancelled'
         action.concluidoEm = new Date().toISOString().slice(0, 10)
         changed = true
@@ -188,6 +247,7 @@ export class ActionRegistry {
         status:           'open' as ActionStatus,
         criadoEm:         date,
         fonteArtefato:    artifactFileName,
+        statusHistory:    [{ status: 'open' as ActionStatus, date, source: '1on1-deep' as const }],
         // Extended v2 fields (backward compat — optional)
         ...({
           tipo:          acao.tipo,
@@ -201,6 +261,23 @@ export class ActionRegistry {
     if (newActions.length > 0) {
       this.write(slug, [...newActions, ...existing])
     }
+  }
+
+  /**
+   * Persists a full list of actions for a person, replacing current state.
+   * Use this when you have already mutated objects from list() in memory.
+   */
+  saveAll(slug: string, actions: Action[]): void {
+    this.write(slug, actions)
+  }
+
+  private appendHistory(action: Action, newStatus: ActionStatus, source: ActionStatusHistoryEntry['source']): void {
+    if (!action.statusHistory) action.statusHistory = []
+    action.statusHistory.push({
+      status: newStatus,
+      date: new Date().toISOString().slice(0, 10),
+      source,
+    })
   }
 
   private inferSlug(nome: string, registeredSlugs: Set<string>): string | null {

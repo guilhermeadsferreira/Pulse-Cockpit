@@ -20,6 +20,67 @@ import { buildAutoavaliacaoPrompt, renderAutoavaliacaoMarkdown, type Autoavaliac
 import type { CycleReportParams, AutoavaliacaoParams, DemandaStatus } from '../renderer/src/types/ipc'
 import { Logger, type LogLevel } from './logging'
 import { Scheduler } from './external/Scheduler'
+import { ExternalDataPass } from './external/ExternalDataPass'
+import { WeeklyReportGenerator } from './external/WeeklyReportGenerator'
+import { MonthlyReportGenerator } from './external/MonthlyReportGenerator'
+import { GitHubClient } from './external/GitHubClient'
+import { SystemAuditor } from './audit/SystemAuditor'
+import yaml from 'js-yaml'
+
+interface ExternalJiraSnapshot {
+  sprintAtual?: { nome: string; id: number } | null
+  issuesAbertas: number
+  issuesFechadasSprint: number
+  storyPointsSprint: number
+  workloadScore: 'alto' | 'medio' | 'baixo'
+  bugsAtivos: number
+  blockersAtivos: Array<{ key: string; summary: string }>
+  tempoMedioCicloDias: number
+}
+
+interface ExternalGitHubSnapshot {
+  commits30d: number
+  commitsPorSemana: number
+  prsMerged30d: number
+  prsAbertos: number
+  prsRevisados: number
+  tempoMedioAbertoDias: number
+  tempoMedioReviewDias: number
+  tamanhoMedioPR: { additions: number; deletions: number }
+  avgCommentsPerReview?: number
+  firstReviewTurnaroundDias?: number
+  approvalRate?: number
+  collaborationScore?: number
+  testCoverageRatio?: number
+}
+
+interface ExternalCrossInsight {
+  tipo: string
+  severidade: 'alta' | 'media' | 'baixa'
+  descricao: string
+  evidencia?: string
+  acaoSugerida?: string
+  causa_raiz?: string
+}
+
+interface ExternalDataSnapshot {
+  atualizadoEm: string
+  jira: ExternalJiraSnapshot | null
+  github: ExternalGitHubSnapshot | null
+  insights: ExternalCrossInsight[]
+}
+
+function validateExternalSnapshot(data: unknown): ExternalDataSnapshot | null {
+  if (!data || typeof data !== 'object') return null
+  const d = data as Record<string, unknown>
+  if (typeof d.atualizadoEm !== 'string') return null
+  return {
+    atualizadoEm: d.atualizadoEm,
+    jira: (d.jira && typeof d.jira === 'object') ? d.jira as ExternalDataSnapshot['jira'] : null,
+    github: (d.github && typeof d.github === 'object') ? d.github as ExternalDataSnapshot['github'] : null,
+    insights: Array.isArray(d.insights) ? d.insights as ExternalDataSnapshot['insights'] : [],
+  }
+}
 
 const APP_ICON = app.isPackaged
   ? join(process.resourcesPath, 'Logo.png')
@@ -31,6 +92,106 @@ let fileWatcher:  FileWatcher  | null = null
 function getRegistry(): PersonRegistry {
   const { workspacePath } = SettingsManager.load()
   return new PersonRegistry(workspacePath)
+}
+
+/**
+ * Gera pauta de 1:1 para uma pessoa. Extraida do handler IPC para reuso pelo Scheduler.
+ * Retorna o resultado da geracao ou throws em caso de erro.
+ */
+export async function generateAgendaForPerson(
+  slug: string,
+  workspacePath: string,
+  claudeBinPath: string,
+): Promise<{ success: boolean; pauta?: string; path?: string; error?: string }> {
+  const registry = new PersonRegistry(workspacePath)
+  const person = registry.get(slug)
+  if (!person) return { success: false, error: 'Pessoa não encontrada.' }
+
+  const configRaw = registry.getConfigRaw(slug)
+  const perfilData = registry.getPerfil(slug)
+  if (!perfilData) {
+    return { success: false, error: 'Perfil não encontrado. Ingira pelo menos um artefato primeiro.' }
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const pautasAnteriores = registry.getLastPautas(slug, 2)
+  const openActions = new ActionRegistry(workspacePath)
+    .list(slug)
+    .filter((a) => a.status === 'open')
+    .map((a) => ({ texto: a.texto, criadoEm: a.criadoEm }))
+
+  const settings = SettingsManager.load()
+  let markdown: string
+
+  if (person.relacao === 'gestor') {
+    const liderados = registry.getTeamRollup()
+    const prompt = buildGestorAgendaPrompt({
+      configYaml: configRaw,
+      perfilMd: perfilData.raw,
+      today,
+      liderados,
+      pautasAnteriores,
+      openActions,
+    })
+    const result = await runWithProvider('agendaGeneration', settings, prompt, {
+      claudeBinPath,
+      claudeTimeoutMs: 90_000,
+      openRouterTimeoutMs: 90_000,
+    })
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error || 'Falha ao gerar pauta.' }
+    }
+    const agendaResult = result.data as AgendaGestorAIResult
+    markdown = renderGestorAgendaMarkdown(person.nome, today, agendaResult)
+  } else {
+    const ultimaIngestao = (perfilData.frontmatter.ultima_ingestao as string)
+      || (perfilData.frontmatter.ultima_atualizacao as string)?.slice(0, 10)
+      || null
+    const dadosStale = ultimaIngestao
+      ? (Date.now() - new Date(ultimaIngestao).getTime()) > 30 * 24 * 60 * 60 * 1000
+      : false
+    const actionReg = new ActionRegistry(workspacePath)
+    const enrichedActions = actionReg.list(slug)
+      .filter((a) => a.status === 'open')
+      .map((a) => ({
+        texto: a.texto,
+        descricao: (a as Record<string, unknown>).descricao as string | undefined,
+        criadoEm: a.criadoEm,
+        owner: a.owner,
+        tipo: (a as Record<string, unknown>).tipo as string | undefined,
+        contexto: (a as Record<string, unknown>).contexto as string | undefined,
+        ciclos_sem_mencao: (a as Record<string, unknown>).ciclos_sem_mencao as number | undefined,
+      }))
+
+    const insightsMatch = perfilData.raw.match(/## Insights de 1:1\n[\s\S]*?<!--[^>]*-->\n([\s\S]*?)<!--/)
+    const insightsRecentes = insightsMatch?.[1]?.trim()
+      ?.split('\n').filter(Boolean).slice(-5).join('\n') || ''
+
+    const sinaisMatch = perfilData.raw.match(/## Sinais de Terceiros\n[\s\S]*?<!--[^>]*-->\n([\s\S]*?)<!--/)
+    const sinaisTerceiros = sinaisMatch?.[1]?.trim() || ''
+
+    const pdiMatch = configRaw.match(/pdi:\n([\s\S]*?)(?=\n\w|\n$|$)/)
+    const pdiEstruturado = pdiMatch?.[1]?.trim() || ''
+
+    const externalMatch = perfilData.raw.match(/## Dados Externos\n[\s\S]*?<!--[^>]*-->\n([\s\S]*?)<!--/)
+    const externalData = externalMatch?.[1]?.trim() || ''
+
+    const prompt = buildAgendaPrompt({ configYaml: configRaw, perfilMd: perfilData.raw, today, dadosStale, pautasAnteriores, openActions: enrichedActions, insightsRecentes, sinaisTerceiros, pdiEstruturado, externalData })
+    const result = await runWithProvider('agendaGeneration', settings, prompt, {
+      claudeBinPath,
+      claudeTimeoutMs: 90_000,
+      openRouterTimeoutMs: 90_000,
+    })
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error || 'Falha ao gerar pauta.' }
+    }
+    const agendaResult = result.data as AgendaAIResult
+    markdown = renderAgendaMarkdown(person.nome, today, agendaResult)
+  }
+
+  registry.savePauta(slug, today, markdown)
+  const filePath = join(workspacePath, 'pessoas', slug, 'pautas', `${today}-pauta.md`)
+  return { success: true, path: filePath, pauta: markdown }
 }
 
 function createWindow(): void {
@@ -145,6 +306,36 @@ function registerIpcHandlers(): void {
       return readFileSync(filePath, 'utf-8')
     } catch {
       return ''
+    }
+  })
+
+  ipcMain.handle('artifacts:open', (_event, slug: string, fileName: string) => {
+    const { workspacePath } = SettingsManager.load()
+    const filePath = join(workspacePath, 'pessoas', slug, 'historico', fileName)
+    if (existsSync(filePath)) shell.openPath(filePath)
+  })
+
+  // ── Resumo Executivo RH (último disponível nos artefatos 1:1) ──
+  ipcMain.handle('people:last-resumo-rh', (_event, slug: string) => {
+    const { workspacePath } = SettingsManager.load()
+    const historicoDir = join(workspacePath, 'pessoas', slug, 'historico')
+    if (!existsSync(historicoDir)) return null
+    try {
+      const files = readdirSync(historicoDir)
+        .filter((f) => f.endsWith('.md'))
+        .sort()
+        .reverse()
+      for (const file of files) {
+        const content = readFileSync(join(historicoDir, file), 'utf-8')
+        const match = content.match(/## Resumo Executivo \(Qulture Rocks\)\n\n([\s\S]+?)(?:\n---|\n##|$)/)
+        if (match) {
+          const dateMatch = file.match(/^(\d{4}-\d{2}-\d{2})/)
+          return { resumo: match[1].trim(), date: dateMatch?.[1] ?? null, artifact: file }
+        }
+      }
+      return null
+    } catch {
+      return null
     }
   })
 
@@ -264,102 +455,11 @@ function registerIpcHandlers(): void {
     if (!settings.claudeBinPath) {
       return { success: false, error: 'Claude CLI não configurado. Configure o caminho em Settings.' }
     }
-    const registry = getRegistry()
-    const person = registry.get(slug)
-    if (!person) return { success: false, error: 'Pessoa não encontrada.' }
-
-    const configRaw = registry.getConfigRaw(slug)
-    const perfilData = registry.getPerfil(slug)
-    if (!perfilData) {
-      return { success: false, error: 'Perfil não encontrado. Ingira pelo menos um artefato primeiro.' }
+    try {
+      return await generateAgendaForPerson(slug, settings.workspacePath, settings.claudeBinPath)
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
     }
-
-    const today = new Date().toISOString().slice(0, 10)
-    const pautasAnteriores = registry.getLastPautas(slug, 2)
-    const openActions = new ActionRegistry(settings.workspacePath)
-      .list(slug)
-      .filter((a) => a.status === 'open')
-      .map((a) => ({ texto: a.texto, criadoEm: a.criadoEm }))
-
-    let markdown: string
-
-    if (person.relacao === 'gestor') {
-      // Pauta com o meu gestor — inclui roll-up do time
-      const liderados = registry.getTeamRollup()
-      // TODO Fase 5: enrich gestor agenda with tendencias, correlações, riscos compostos
-      const prompt = buildGestorAgendaPrompt({
-        configYaml: configRaw,
-        perfilMd: perfilData.raw,
-        today,
-        liderados,
-        pautasAnteriores,
-        openActions,
-      })
-      const result = await runWithProvider('agendaGeneration', settings, prompt, {
-        claudeBinPath: settings.claudeBinPath,
-        claudeTimeoutMs: 90_000,
-        openRouterTimeoutMs: 90_000,
-      })
-      if (!result.success || !result.data) {
-        return { success: false, error: result.error || 'Falha ao gerar pauta.' }
-      }
-      const agendaResult = result.data as AgendaGestorAIResult
-      markdown = renderGestorAgendaMarkdown(person.nome, today, agendaResult)
-    } else {
-      // Pauta com liderado, par ou stakeholder — fluxo original
-      const ultimaIngestao = (perfilData.frontmatter.ultima_ingestao as string)
-        || (perfilData.frontmatter.ultima_atualizacao as string)?.slice(0, 10)
-        || null
-      const dadosStale = ultimaIngestao
-        ? (Date.now() - new Date(ultimaIngestao).getTime()) > 30 * 24 * 60 * 60 * 1000
-        : false
-      // Enrich context: insights, sinais, PDI
-      const actionReg = new ActionRegistry(settings.workspacePath)
-      const enrichedActions = actionReg.list(slug)
-        .filter((a) => a.status === 'open')
-        .map((a) => ({
-          texto: a.texto,
-          descricao: (a as Record<string, unknown>).descricao as string | undefined,
-          criadoEm: a.criadoEm,
-          owner: a.owner,
-          tipo: (a as Record<string, unknown>).tipo as string | undefined,
-          contexto: (a as Record<string, unknown>).contexto as string | undefined,
-          ciclos_sem_mencao: (a as Record<string, unknown>).ciclos_sem_mencao as number | undefined,
-        }))
-
-      // Extract insights from perfil
-      const insightsMatch = perfilData.raw.match(/## Insights de 1:1\n[\s\S]*?<!--[^>]*-->\n([\s\S]*?)<!--/)
-      const insightsRecentes = insightsMatch?.[1]?.trim()
-        ?.split('\n').filter(Boolean).slice(-5).join('\n') || ''
-
-      // Extract sinais de terceiros
-      const sinaisMatch = perfilData.raw.match(/## Sinais de Terceiros\n[\s\S]*?<!--[^>]*-->\n([\s\S]*?)<!--/)
-      const sinaisTerceiros = sinaisMatch?.[1]?.trim() || ''
-
-      // Serialize PDI from config
-      const pdiMatch = configRaw.match(/pdi:\n([\s\S]*?)(?=\n\w|\n$|$)/)
-      const pdiEstruturado = pdiMatch?.[1]?.trim() || ''
-
-      // Extract Dados Externos section from perfil.md
-      const externalMatch = perfilData.raw.match(/## Dados Externos\n[\s\S]*?<!--[^>]*-->\n([\s\S]*?)<!--/)
-      const externalData = externalMatch?.[1]?.trim() || ''
-
-      const prompt = buildAgendaPrompt({ configYaml: configRaw, perfilMd: perfilData.raw, today, dadosStale, pautasAnteriores, openActions: enrichedActions, insightsRecentes, sinaisTerceiros, pdiEstruturado, externalData })
-      const result = await runWithProvider('agendaGeneration', settings, prompt, {
-        claudeBinPath: settings.claudeBinPath,
-        claudeTimeoutMs: 90_000,
-        openRouterTimeoutMs: 90_000,
-      })
-      if (!result.success || !result.data) {
-        return { success: false, error: result.error || 'Falha ao gerar pauta.' }
-      }
-      const agendaResult = result.data as AgendaAIResult
-      markdown = renderAgendaMarkdown(person.nome, today, agendaResult)
-    }
-
-    registry.savePauta(slug, today, markdown)
-    const filePath = join(settings.workspacePath, 'pessoas', slug, 'pautas', `${today}-pauta.md`)
-    return { success: true, path: filePath, markdown }
   })
 
   ipcMain.handle('ai:cycle-report', async (_event, params: CycleReportParams) => {
@@ -465,6 +565,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle('demandas:list', () => {
     const { workspacePath } = SettingsManager.load()
     return new DemandaRegistry(workspacePath).list()
+  })
+
+  ipcMain.handle('demandas:list-by-person', (_event, personSlug: string) => {
+    const { workspacePath } = SettingsManager.load()
+    return new DemandaRegistry(workspacePath).list().filter((d) => d.pessoaSlug === personSlug && d.status === 'open')
   })
 
   ipcMain.handle('demandas:save', (_event, demanda) => {
@@ -651,8 +756,17 @@ function registerIpcHandlers(): void {
   // ── External Intelligence ─────────────────────────────────
   ipcMain.handle('external:refresh-daily', async () => {
     const { workspacePath } = SettingsManager.load()
+    const log = Logger.getInstance().child('IPC')
+    log.info('external:refresh-daily chamado')
     const scheduler = new Scheduler(workspacePath)
-    return scheduler.generateDailyReport()
+    try {
+      const result = await scheduler.generateDailyReport()
+      log.info('external:refresh-daily sucesso', { result })
+      return result
+    } catch (err) {
+      log.error('external:refresh-daily erro', { error: err instanceof Error ? err.message : String(err) })
+      throw err
+    }
   })
 
   ipcMain.handle('external:refresh-sprint', async () => {
@@ -661,15 +775,38 @@ function registerIpcHandlers(): void {
     return scheduler.generateSprintReport()
   })
 
-  ipcMain.handle('external:get-data', async (_event, slug: string) => {
+  ipcMain.handle('external:refresh-weekly', async () => {
+    const { workspacePath } = SettingsManager.load()
+    const generator = new WeeklyReportGenerator(workspacePath)
+    return generator.generate()
+  })
+
+  ipcMain.handle('external:refresh-monthly', async (_event, yearMonth?: string) => {
+    const { workspacePath } = SettingsManager.load()
+    const generator = new MonthlyReportGenerator(workspacePath)
+    return generator.generate(yearMonth)
+  })
+
+  ipcMain.handle('external:get-data', async (_event, slug: string): Promise<ExternalDataSnapshot | null> => {
     const { workspacePath } = SettingsManager.load()
     const yamlPath = join(workspacePath, 'pessoas', slug, 'external_data.yaml')
     if (!existsSync(yamlPath)) return null
     try {
-      return readFileSync(yamlPath, 'utf-8')
+      const raw = readFileSync(yamlPath, 'utf-8')
+      const parsed = yaml.load(raw)
+      if (!parsed || typeof parsed !== 'object') return null
+      const doc = parsed as Record<string, unknown>
+      const snapshot = doc.atual ?? doc
+      return validateExternalSnapshot(snapshot)
     } catch {
       return null
     }
+  })
+
+  ipcMain.handle('external:get-historico', async (_event, slug: string) => {
+    const { workspacePath } = SettingsManager.load()
+    const pass = new ExternalDataPass(workspacePath)
+    return pass.loadHistorico(slug) ?? null
   })
 
   ipcMain.handle('external:list-reports', () => {
@@ -697,6 +834,189 @@ function registerIpcHandlers(): void {
       return readFileSync(fullPath, 'utf-8')
     } catch {
       return ''
+    }
+  })
+
+  ipcMain.handle('external:refresh-person', async (_event, slug: string) => {
+    const { workspacePath } = SettingsManager.load()
+    const scheduler = new Scheduler(workspacePath)
+    return scheduler.refreshPerson(slug)
+  })
+
+  ipcMain.handle('github:sync-team-repos', async () => {
+    const settings = SettingsManager.load()
+    const { githubToken, githubOrg, githubTeamSlug } = settings
+
+    if (!githubToken || !githubOrg || !githubTeamSlug) {
+      return { success: false, error: 'Token, organização e team slug são obrigatórios' }
+    }
+
+    try {
+      const client = new GitHubClient({ token: githubToken, org: githubOrg, repos: [] })
+      const repos = await client.listTeamRepos(githubTeamSlug)
+      SettingsManager.save({
+        ...settings,
+        githubRepos: repos,
+        githubReposCachedAt: new Date().toISOString(),
+      })
+      return { success: true, repos }
+    } catch (err) {
+      const ghErr = err as { status?: number; message?: string }
+      let errorMsg = 'Erro ao sincronizar repositórios'
+      if (ghErr.status === 404) {
+        errorMsg = 'Team não encontrado ou sem acesso. Verifique o slug.'
+      } else if (ghErr.status === 403) {
+        errorMsg = 'Sem permissão para listar repos do team. Verifique as permissões do token.'
+      } else if (ghErr.message) {
+        errorMsg = ghErr.message
+      }
+      return { success: false, error: errorMsg }
+    }
+  })
+
+  // ── Escalations ───────────────────────────────────────────────
+  ipcMain.handle('actions:escalations', async () => {
+    const settings = SettingsManager.load()
+    const actionRegistry = new ActionRegistry(settings.workspacePath)
+    const personRegistry = new PersonRegistry(settings.workspacePath)
+    const liderados = personRegistry.list().filter(p => p.relacao === 'liderado')
+
+    const allEscalations: Array<{
+      slug: string
+      nome: string
+      gestorAction: { id: string; texto: string; descricao?: string; criadoEm: string }
+      diasPendente: number
+      relatedCount: number
+    }> = []
+
+    for (const person of liderados) {
+      const escalations = actionRegistry.getEscalations(person.slug)
+      for (const esc of escalations) {
+        allEscalations.push({
+          slug: person.slug,
+          nome: person.nome,
+          gestorAction: {
+            id: esc.gestorAction.id,
+            texto: esc.gestorAction.texto,
+            descricao: esc.gestorAction.descricao,
+            criadoEm: esc.gestorAction.criadoEm,
+          },
+          diasPendente: esc.diasPendente,
+          relatedCount: esc.relatedLideradoActions.length,
+        })
+      }
+    }
+
+    return allEscalations
+  })
+
+  // ── Cross-Team Insights ────────────────────────────────────────
+  ipcMain.handle('insights:cross-team', async () => {
+    const settings = SettingsManager.load()
+    const registry = new PersonRegistry(settings.workspacePath)
+    const actionReg = new ActionRegistry(settings.workspacePath)
+    const liderados = registry.list().filter(p => p.relacao === 'liderado')
+
+    const insights: Array<{ tipo: string; descricao: string; pessoas: string[]; severidade: 'alta' | 'media' | 'baixa' }> = []
+
+    // Coletar perfis e acoes de todos os liderados
+    const perfilMap: Record<string, Record<string, unknown>> = {}
+    const actionsMapCT: Record<string, import('../renderer/src/types/ipc').Action[]> = {}
+    for (const p of liderados) {
+      const perfilData = registry.getPerfil(p.slug)
+      perfilMap[p.slug] = perfilData?.frontmatter ?? {}
+      actionsMapCT[p.slug] = actionReg.list(p.slug)
+    }
+
+    // Insight 1: Multiplas pessoas com saude amarelo/vermelho
+    const saudeAmarelo = liderados.filter(p => perfilMap[p.slug]?.saude === 'amarelo')
+    const saudeVermelho = liderados.filter(p => perfilMap[p.slug]?.saude === 'vermelho')
+    if (saudeVermelho.length >= 2) {
+      insights.push({
+        tipo: 'saude_critica_generalizada',
+        descricao: `${saudeVermelho.length} pessoas com saude critica simultaneamente`,
+        pessoas: saudeVermelho.map(p => p.nome),
+        severidade: 'alta',
+      })
+    } else if (saudeAmarelo.length >= 3) {
+      insights.push({
+        tipo: 'saude_atencao_generalizada',
+        descricao: `${saudeAmarelo.length} pessoas com saude em atencao — possivel problema sistemico`,
+        pessoas: saudeAmarelo.map(p => p.nome),
+        severidade: 'media',
+      })
+    }
+
+    // Insight 2: Estagnacao em multiplos perfis
+    const estagnacao = liderados.filter(p => perfilMap[p.slug]?.alerta_estagnacao)
+    if (estagnacao.length >= 2) {
+      insights.push({
+        tipo: 'estagnacao_multipla',
+        descricao: `${estagnacao.length} pessoas com estagnacao detectada — avaliar oportunidades e desafios`,
+        pessoas: estagnacao.map(p => p.nome),
+        severidade: 'media',
+      })
+    }
+
+    // Insight 3: Muitas acoes vencidas no time
+    const today = new Date().toISOString().slice(0, 10)
+    const pessoasComVencidas = liderados.filter(p => {
+      const vencidas = (actionsMapCT[p.slug] ?? []).filter(a => a.status === 'open' && a.prazo && a.prazo < today)
+      return vencidas.length > 0
+    })
+    if (pessoasComVencidas.length >= 3) {
+      insights.push({
+        tipo: 'acoes_vencidas_generalizadas',
+        descricao: `${pessoasComVencidas.length} pessoas com acoes vencidas — revisao de followup necessaria`,
+        pessoas: pessoasComVencidas.map(p => p.nome),
+        severidade: 'media',
+      })
+    }
+
+    // Insight 4: Dados stale em muitas pessoas
+    const stale = liderados.filter(p => perfilMap[p.slug]?.dados_stale)
+    if (stale.length >= Math.ceil(liderados.length * 0.4) && stale.length >= 2) {
+      insights.push({
+        tipo: 'dados_desatualizados',
+        descricao: `${stale.length} de ${liderados.length} pessoas sem dados ha 30+ dias — cadencia de ingestao baixa`,
+        pessoas: stale.map(p => p.nome),
+        severidade: 'baixa',
+      })
+    }
+
+    // Insight 5: Nenhuma evolucao no time
+    const comEvolucao = liderados.filter(p => perfilMap[p.slug]?.sinal_evolucao)
+    if (liderados.length >= 3 && comEvolucao.length === 0) {
+      insights.push({
+        tipo: 'sem_evolucao',
+        descricao: 'Nenhum liderado com sinal de evolucao — avaliar se ha oportunidades de crescimento',
+        pessoas: [],
+        severidade: 'baixa',
+      })
+    }
+
+    // Insight 6: Tendencia emocional deteriorando em multiplos
+    const deteriorando = liderados.filter(p => perfilMap[p.slug]?.tendencia_emocional === 'deteriorando')
+    if (deteriorando.length >= 2) {
+      insights.push({
+        tipo: 'tendencia_deteriorando_multipla',
+        descricao: `${deteriorando.length} pessoas com tendencia emocional deteriorando — possivel problema de equipe`,
+        pessoas: deteriorando.map(p => p.nome),
+        severidade: 'alta',
+      })
+    }
+
+    return insights
+  })
+
+  // ── System Audit ─────────────────────────────────────────────
+  ipcMain.handle('audit:run', async () => {
+    const { workspacePath } = SettingsManager.load()
+    try {
+      const auditor = new SystemAuditor(workspacePath)
+      return await auditor.run()
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : String(err) }
     }
   })
 }
@@ -769,11 +1089,12 @@ app.whenReady().then(async () => {
   fileWatcher.restorePending() // restore items pending from previous session
   fileWatcher.syncAllPending() // sync pending items whose persons are now registered
 
-  // Scheduler: daily report + sprint change detection
+  // Scheduler: daily report + sprint change detection + sprint polling
   const scheduler = new Scheduler(settings.workspacePath)
   scheduler.onAppStart().catch((err) => {
     Logger.getInstance().child('Scheduler').warn('onAppStart falhou', { error: err instanceof Error ? err.message : String(err) })
   })
+  app.on('before-quit', () => scheduler.stopSprintPolling())
 
   setupAutoUpdater()
 

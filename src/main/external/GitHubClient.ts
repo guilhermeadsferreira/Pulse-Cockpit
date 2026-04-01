@@ -47,6 +47,14 @@ export interface GitHubReview {
   repo: string
 }
 
+export interface GitHubReviewComment {
+  prNumber: number
+  author: string
+  body: string
+  createdAt: string
+  repo: string
+}
+
 export interface TeamActivity {
   pullRequests: GitHubPR[]
   commits: GitHubCommit[]
@@ -140,6 +148,109 @@ export class GitHubClient {
     }
 
     return { pullRequests, commits, reviews }
+  }
+
+  async listTeamRepos(teamSlug: string): Promise<string[]> {
+    try {
+      const { data } = await this.octokit.rest.teams.listReposInOrg({
+        org: this.org,
+        team_slug: teamSlug,
+        per_page: 100,
+      })
+      return data.map(r => r.name)
+    } catch (err) {
+      const ghErr = err as { status?: number; message?: string }
+      log.warn('Falha ao buscar repos do team', { 
+        org: this.org, 
+        teamSlug, 
+        status: ghErr.status, 
+        error: ghErr.message 
+      })
+      throw err
+    }
+  }
+
+  async getReviewCommentsByUser(username: string, since?: string): Promise<GitHubReviewComment[]> {
+    const allComments: GitHubReviewComment[] = []
+
+    for (const repo of this.repos) {
+      try {
+        const { perPage, maxPages } = DEFAULT_PAGINATION
+        let page = 1
+
+        while (page <= maxPages) {
+          try {
+            const { data } = await this.octokit.rest.pulls.list({
+              owner: this.org,
+              repo,
+              state: 'all',
+              sort: 'updated',
+              direction: 'desc',
+              per_page: perPage,
+              page,
+            })
+
+            if (data.length === 0) break
+
+            for (const pr of data) {
+              if (since && pr.updated_at < since) {
+                page = maxPages + 1
+                break
+              }
+
+              try {
+                const { data: comments } = await this.octokit.rest.pulls.listReviewComments({
+                  owner: this.org,
+                  repo,
+                  pull_number: pr.number,
+                })
+
+                for (const comment of comments) {
+                  if (comment.user?.login !== username) continue
+                  if (since && comment.created_at < since) continue
+
+                  allComments.push({
+                    prNumber: pr.number,
+                    author: username,
+                    body: comment.body,
+                    createdAt: comment.created_at,
+                    repo,
+                  })
+                }
+              } catch { /* skip PR if comments fail */ }
+            }
+
+            page++
+          } catch (err) {
+            const ghErr = err as { status?: number }
+            if (ghErr.status === 403) {
+              log.warn('GitHub rate limit ou sem permissao', { repo, username })
+              break
+            }
+            throw err
+          }
+        }
+      } catch (err) {
+        log.warn('Falha ao buscar review comments', { repo, username, error: (err as Error).message })
+      }
+    }
+
+    return allComments.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  }
+
+  async getPRFilenames(owner: string, repo: string, prNumber: number): Promise<string[]> {
+    try {
+      const { data } = await this.octokit.rest.pulls.listFiles({
+        owner,
+        repo,
+        pull_number: prNumber,
+        per_page: 100,
+      })
+      return data.map(f => f.filename)
+    } catch (err) {
+      log.warn('Falha ao buscar arquivos do PR', { repo, prNumber, error: (err as Error).message })
+      return []
+    }
   }
 
   private async fetchPRsForRepo(

@@ -6,6 +6,8 @@ export interface OneOnOneDeepPromptParams {
   openActionsGestor: string      // ações abertas do gestor serializadas
   sinaisTerceiros: string        // sinais de terceiros do perfil
   historicoSaude: string         // últimas 5 entradas do histórico de saúde
+  contagem1on1s: number          // quantas entradas de 1:1 existem no histórico de saúde
+  externalData?: string          // métricas Jira/GitHub do external_data.yaml
   today: string                  // YYYY-MM-DD
   managerName?: string
 }
@@ -59,6 +61,12 @@ export interface OneOnOnePdiUpdate {
   progresso_observado: string | null
 }
 
+export interface OneOnOnePrioridadeAtualizada {
+  acao_id: string
+  nova_prioridade: 'baixa' | 'media' | 'alta'
+  motivo: string
+}
+
 export interface OneOnOneResult {
   followup_acoes: OneOnOneFollowup[]
   acoes_liderado: OneOnOneAcaoLiderado[]
@@ -70,13 +78,15 @@ export interface OneOnOneResult {
   nota_tendencia: string
   pdi_update: OneOnOnePdiUpdate
   resumo_executivo_rh: string
+  auto_percepcao?: 'alinhada_com_feedback' | 'cega' | 'inflacionada_positivamente' | null
+  prioridade_atualizada: OneOnOnePrioridadeAtualizada[]
 }
 
 export function build1on1DeepPrompt(params: OneOnOneDeepPromptParams): string {
   const {
     artifactContent, perfilMdRaw, configYaml,
     openActionsLiderado, openActionsGestor,
-    sinaisTerceiros, historicoSaude, today, managerName,
+    sinaisTerceiros, historicoSaude, contagem1on1s, externalData, today, managerName,
   } = params
   const gestorLabel = managerName || 'Gestor'
 
@@ -108,7 +118,10 @@ ${sinaisTerceiros || 'Nenhum sinal de terceiro registrado.'}
 
 ## Histórico de saúde recente
 ${historicoSaude || 'Sem histórico.'}
-
+${externalData ? `
+## Dados Externos (métricas objetivas Jira/GitHub)
+${externalData}
+` : ''}
 ## Transcrição / anotação do 1:1
 <artefato>
 ${artifactContent}
@@ -180,15 +193,29 @@ Compare o conteúdo do 1:1 com os sinais de terceiros fornecidos acima.
 **"tendencia_emocional"** — Compare sentimento e engajamento deste 1:1 com o histórico de saúde:
 - "estavel": sem mudança significativa
 - "melhorando": sinais positivos comparados ao histórico recente
-- "deteriorando": padrão de piora em 2+ registros consecutivos
-- "novo_sinal": sinal emocional sem precedente no histórico
-"nota_tendencia": 1-2 frases explicando a avaliação.
+- "deteriorando": SOMENTE quando há evidência de piora NESTE 1:1 E na última entrada do histórico de saúde. Um único 1:1 ruim nunca é suficiente para "deteriorando" — use "novo_sinal" nesses casos. REGRA ADICIONAL: se o histórico de saúde tem menos de 2 entradas de 1:1 (contagem atual: ${contagem1on1s}), NUNCA use "deteriorando" — use "novo_sinal" obrigatoriamente
+- "novo_sinal": sinal emocional sem precedente no histórico, ou única evidência de piora sem confirmação histórica
+"nota_tendencia": 1-2 frases explicando a avaliação. Se "deteriorando", cite explicitamente as 2+ evidências consecutivas.
 
 **"pdi_update"** — Menção ao PDI:
 - "houve_mencao_pdi": true se PDI, carreira ou desenvolvimento foram mencionados
 - "objetivos_mencionados": objetivos do PDI (do config.yaml) que foram citados
 - "novo_objetivo_sugerido": se um novo objetivo de PDI foi sugerido, descreva. null se não
 - "progresso_observado": evidência concreta de progresso em algum objetivo. null se nenhuma
+
+**"prioridade_atualizada"** — Atualizacao de prioridade das acoes abertas:
+Analise as acoes abertas fornecidas. Se o contexto do 1:1 revela urgencia nova (prazo apertado, bloqueio, pedido explicito) ou reduz urgencia (ja resolvido parcialmente, contexto mudou), inclua em prioridade_atualizada.
+
+## Prioridade de acoes
+Analise as acoes abertas fornecidas. Se o contexto do 1:1 revela urgencia nova (prazo apertado, bloqueio, pedido explicito) ou reduz urgencia (ja resolvido parcialmente, contexto mudou), inclua em prioridade_atualizada. Retorne array vazio se nenhuma mudanca necessaria.
+
+**"auto_percepcao"** — Como o liderado se vê em relação ao feedback que recebe:
+Avalie com base no que o liderado disse sobre seu próprio desempenho, comparando com o que o gestor observa (histórico do perfil, ações abertas, sinais de terceiros):
+- "alinhada_com_feedback": o liderado reconhece pontos de melhoria e conquistas de forma consistente com o que o gestor observa
+- "cega": o liderado não percebe problemas que são evidentes no histórico ou para o gestor — não os menciona, minimiza ou não demonstra consciência de seu impacto
+- "inflacionada_positivamente": o liderado superestima seu desempenho ou contribuição de forma desconectada das evidências disponíveis
+- null: não há evidências suficientes neste 1:1 para avaliar (liderado não tocou no tema, 1:1 foi muito operacional)
+IMPORTANTE: Este campo é para uso interno do gestor — NÃO vai para o resumo_executivo_rh.
 
 **"resumo_executivo_rh"** — Resumo executivo para Qulture Rocks:
 Ata limpa, autônoma e pronta para colar no Qulture Rocks e compartilhar com o liderado. Deve ser legível por alguém que não esteve presente na reunião.
@@ -202,6 +229,7 @@ Estrutura obrigatória — use exatamente estas seções na ordem abaixo:
 
 Tom: profissional, direto, sem jargão interno do app.
 OMITIR obrigatoriamente: tendência emocional, insights de carreira/PDI, análise qualitativa interna, sinais sensíveis, saúde emocional — nada que seja inadequado para registro formal de RH ou para o liderado ler.
+PRIVACIDADE OBRIGATÓRIA: Se o 1:1 tocou temas pessoais, saúde, família, situação financeira ou qualquer dado sensível, use exclusivamente a fórmula: "Temas pessoais: alinhados. Continuaremos acompanhando." — nunca descreva o conteúdo, mesmo que de forma genérica.
 Se não houver ações do liderado ou do gestor neste 1:1, omitir a seção correspondente (não gerar bullets vazios).
 
 JSON esperado:
@@ -232,6 +260,14 @@ JSON esperado:
     "novo_objetivo_sugerido": "string ou null",
     "progresso_observado": "string ou null"
   },
-  "resumo_executivo_rh": "string"
+  "resumo_executivo_rh": "string",
+  "auto_percepcao": "alinhada_com_feedback|cega|inflacionada_positivamente|null",
+  "prioridade_atualizada": [
+    {
+      "acao_id": "id da acao existente",
+      "nova_prioridade": "baixa | media | alta",
+      "motivo": "razao para mudar prioridade baseada no contexto do 1:1"
+    }
+  ]
 }`
 }

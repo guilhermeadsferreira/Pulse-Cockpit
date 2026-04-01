@@ -56,7 +56,9 @@ export interface AppSettings {
   // GitHub
   githubToken?: string
   githubOrg?: string
+  githubTeamSlug?: string
   githubRepos?: string[]
+  githubReposCachedAt?: string
   githubEnabled?: boolean
 
   // Relatórios
@@ -74,6 +76,7 @@ export interface PDIItem {
   objetivo: string
   status:   PDIStatus
   prazo?:   string
+  evidencias?: string[]   // Evidencias cumulativas de multiplos artefatos
 }
 
 export interface PersonConfig {
@@ -99,6 +102,50 @@ export interface PersonConfig {
   // Identidade externa (V3)
   jiraEmail?:            string
   githubUsername?:       string
+}
+
+// ─── External Intelligence ───────────────────────────────────────────────────
+
+export interface ExternalJiraSnapshot {
+  sprintAtual?: { nome: string; id: number } | null
+  issuesAbertas: number
+  issuesFechadasSprint: number
+  storyPointsSprint: number
+  workloadScore: 'alto' | 'medio' | 'baixo'
+  bugsAtivos: number
+  blockersAtivos: Array<{ key: string; summary: string }>
+  tempoMedioCicloDias: number
+}
+
+export interface ExternalGitHubSnapshot {
+  commits30d: number
+  commitsPorSemana: number
+  prsMerged30d: number
+  prsAbertos: number
+  prsRevisados: number
+  tempoMedioAbertoDias: number
+  tempoMedioReviewDias: number
+  tamanhoMedioPR: { additions: number; deletions: number }
+}
+
+export interface ExternalCrossInsight {
+  tipo: string
+  severidade: 'alta' | 'media' | 'baixa'
+  descricao: string
+  evidencia?: string
+  acaoSugerida?: string
+}
+
+export interface ExternalDataSnapshot {
+  atualizadoEm: string
+  jira: ExternalJiraSnapshot | null
+  github: ExternalGitHubSnapshot | null
+  insights: ExternalCrossInsight[]
+}
+
+export interface ExternalHistoricoEntry {
+  jira?:   { issuesAbertas?: number; storyPointsSprint?: number } | null
+  github?: { commits30d?: number; prsMerged30d?: number; prsRevisados?: number } | null
 }
 
 export interface ArtifactMeta {
@@ -137,11 +184,19 @@ export interface PerfilFrontmatter {
   sinal_evolucao:        boolean
   evidencia_evolucao:    string | null
   dados_stale?:          boolean       // true if no ingestion in 30+ days
+  tendencia_emocional?:  'estavel' | 'melhorando' | 'deteriorando' | 'novo_sinal' | null
+  nota_tendencia?:       string | null
 }
 
 export type ActionStatus   = 'open' | 'in_progress' | 'done' | 'cancelled'
 export type ActionOwner    = 'gestor' | 'liderado' | 'terceiro'
 export type ActionPriority = 'baixa' | 'media' | 'alta'
+
+export interface ActionStatusHistoryEntry {
+  status: ActionStatus
+  date: string        // YYYY-MM-DD
+  source: 'manual' | 'ingestion' | '1on1-deep' | 'jira-sync' | 'escalation' | 'system'
+}
 
 export interface Action {
   id:               string
@@ -158,6 +213,9 @@ export interface Action {
   prioridade?:      ActionPriority
   concluidoEm?:     string | null
   fonteArtefato?:   string
+  pdi_objetivo_ref?: string
+  contexto?:        string
+  statusHistory?:   ActionStatusHistoryEntry[]
 }
 
 export interface PerfilData {
@@ -312,7 +370,9 @@ export interface DocItem {
 }
 
 export interface CerimoniaSinalResult {
-  sentimento_detectado: 'positivo' | 'neutro' | 'ansioso' | 'frustrado' | 'desengajado'
+  sentimentos: Array<{ valor: 'positivo' | 'neutro' | 'ansioso' | 'frustrado' | 'desengajado'; aspecto: string }>
+  /** @deprecated use sentimentos */
+  sentimento_detectado?: 'positivo' | 'neutro' | 'ansioso' | 'frustrado' | 'desengajado'
   nivel_engajamento: 1 | 2 | 3 | 4 | 5
   indicador_saude: 'verde' | 'amarelo' | 'vermelho'
   motivo_indicador: string

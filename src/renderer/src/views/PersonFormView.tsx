@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, Trash2, Plus, X } from 'lucide-react'
 import { useRouter } from '../router'
 import { toSlug } from '../lib/utils'
-import type { PersonConfig, PersonLevel, PersonRelacao } from '../types/ipc'
+import type { PersonConfig, PersonLevel, PersonRelacao, PDIStatus } from '../types/ipc'
 
 const NIVEIS: { value: PersonLevel; label: string }[] = [
   { value: 'junior',    label: 'Junior' },
@@ -43,6 +43,8 @@ const EMPTY: Partial<PersonConfig> = {
   pdi: [],
   alerta_ativo: false,
   notas_manuais: '',
+  jiraEmail: undefined,
+  githubUsername: undefined,
 }
 
 export function PersonFormView() {
@@ -54,6 +56,8 @@ export function PersonFormView() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showDelete, setShowDelete] = useState(false)
+  const [pdiNovo, setPdiNovo] = useState('')
+  const [pdiNovoStatus, setPdiNovoStatus] = useState<PDIStatus>('nao_iniciado')
 
   useEffect(() => {
     if (isEdit) {
@@ -87,6 +91,23 @@ export function PersonFormView() {
 
   function set(field: keyof PersonConfig, value: unknown) {
     setForm((f) => ({ ...f, [field]: value }))
+  }
+
+  function addPdiItem() {
+    if (!pdiNovo.trim()) return
+    set('pdi', [...(form.pdi ?? []), { objetivo: pdiNovo.trim(), status: pdiNovoStatus }])
+    setPdiNovo('')
+    setPdiNovoStatus('nao_iniciado')
+  }
+
+  function removePdiItem(i: number) {
+    set('pdi', (form.pdi ?? []).filter((_, idx) => idx !== i))
+  }
+
+  function updatePdiItem(i: number, field: 'objetivo' | 'status', value: string) {
+    const updated = [...(form.pdi ?? [])]
+    updated[i] = { ...updated[i], [field]: value }
+    set('pdi', updated)
   }
 
   async function handleSave() {
@@ -281,6 +302,78 @@ export function PersonFormView() {
             )}
           </FormSection>
 
+          <FormSection title="PDI">
+            {(form.pdi ?? []).length === 0 && (
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                Nenhum objetivo cadastrado.
+              </p>
+            )}
+            {(form.pdi ?? []).map((item, i) => (
+              <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input
+                  style={{ ...styles.input, flex: 1 }}
+                  value={item.objetivo}
+                  onChange={(e) => updatePdiItem(i, 'objetivo', e.target.value)}
+                  placeholder="Objetivo do PDI…"
+                />
+                <select
+                  style={{ ...styles.select, width: 152, flex: 'none' }}
+                  value={item.status}
+                  onChange={(e) => updatePdiItem(i, 'status', e.target.value)}
+                >
+                  <option value="nao_iniciado">Não iniciado</option>
+                  <option value="em_andamento">Em andamento</option>
+                  <option value="concluido">Concluído</option>
+                </select>
+                <button
+                  onClick={() => removePdiItem(i)}
+                  title="Remover objetivo"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    width: 32, height: 32, borderRadius: 6, flexShrink: 0,
+                    background: 'rgba(184,64,64,0.08)', color: 'var(--red)',
+                    border: '1px solid rgba(184,64,64,0.2)', cursor: 'pointer',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+            <div style={{
+              display: 'flex', gap: 8, alignItems: 'center',
+              ...(( form.pdi ?? []).length > 0 ? { borderTop: '1px solid var(--border-subtle)', paddingTop: 12 } : {}),
+            }}>
+              <input
+                style={{ ...styles.input, flex: 1 }}
+                value={pdiNovo}
+                onChange={(e) => setPdiNovo(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addPdiItem()}
+                placeholder="Novo objetivo…"
+              />
+              <select
+                style={{ ...styles.select, width: 152, flex: 'none' }}
+                value={pdiNovoStatus}
+                onChange={(e) => setPdiNovoStatus(e.target.value as PDIStatus)}
+              >
+                <option value="nao_iniciado">Não iniciado</option>
+                <option value="em_andamento">Em andamento</option>
+                <option value="concluido">Concluído</option>
+              </select>
+              <button
+                onClick={addPdiItem}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '7px 12px', borderRadius: 6, flexShrink: 0,
+                  background: 'var(--surface-2)', color: 'var(--text-primary)',
+                  border: '1px solid var(--border)',
+                  fontSize: 12.5, fontFamily: 'var(--font)', fontWeight: 500, cursor: 'pointer',
+                }}
+              >
+                <Plus size={13} /> Adicionar
+              </button>
+            </div>
+          </FormSection>
+
           <FormSection title="Notas manuais">
             <textarea
               style={{
@@ -292,6 +385,30 @@ export function PersonFormView() {
               onChange={(e) => set('notas_manuais', e.target.value)}
               placeholder="Contexto relevante sobre esta pessoa que a IA deve conhecer…"
             />
+          </FormSection>
+
+          <FormSection title="Identidade Externa">
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0, lineHeight: 1.5 }}>
+              Vincula esta pessoa às suas contas externas para buscar métricas automaticamente. Ambos os campos são opcionais — sem eles, a pessoa é ignorada na análise cruzada.
+            </p>
+            <Field label="Email do Jira" hint="Email usado no Jira (mesmo do Settings)">
+              <input
+                style={styles.input}
+                type="text"
+                value={form.jiraEmail ?? ''}
+                onChange={(e) => set('jiraEmail', e.target.value || undefined)}
+                placeholder="pessoa@empresa.com"
+              />
+            </Field>
+            <Field label="Username do GitHub" hint="Sem @ — igual ao perfil GitHub">
+              <input
+                style={styles.input}
+                type="text"
+                value={form.githubUsername ?? ''}
+                onChange={(e) => set('githubUsername', e.target.value || undefined)}
+                placeholder="username"
+              />
+            </Field>
           </FormSection>
 
         </div>

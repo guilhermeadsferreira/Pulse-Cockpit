@@ -1,4 +1,4 @@
-import type { AppSettings, PersonConfig, ArtifactMeta, ArtifactFeedItem, PerfilData, QueueItem, CycleReportParams, DetectedPerson, PautaMeta, Action, ActionStatus, DocItem, LogLevel, LogEntry } from './ipc'
+import type { AppSettings, PersonConfig, ArtifactMeta, ArtifactFeedItem, PerfilData, QueueItem, CycleReportParams, DetectedPerson, PautaMeta, Action, ActionStatus, DocItem, LogLevel, LogEntry, ExternalHistoricoEntry } from './ipc'
 
 declare global {
   interface Window {
@@ -26,6 +26,7 @@ declare global {
         list: (slug: string) => Promise<ArtifactMeta[]>
         read: (path: string) => Promise<string>
         feed: () => Promise<ArtifactFeedItem[]>
+        open: (slug: string, fileName: string) => Promise<void>
       }
 
       ingestion: {
@@ -57,6 +58,11 @@ declare global {
         save:         (action: unknown) => Promise<void>
         updateStatus: (slug: string, id: string, status: ActionStatus) => Promise<void>
         delete:       (slug: string, id: string) => Promise<void>
+        escalations:  () => Promise<Array<{ slug: string; nome: string; gestorAction: { id: string; texto: string; descricao?: string; criadoEm: string }; diasPendente: number; relatedCount: number }>>
+      }
+
+      insights: {
+        crossTeam: () => Promise<Array<{ tipo: string; descricao: string; pessoas: string[]; severidade: 'alta' | 'media' | 'baixa' }>>
       }
 
       eu: {
@@ -101,9 +107,17 @@ declare global {
       external: {
         refreshDaily:   () => Promise<string>
         refreshSprint:  () => Promise<string | null>
+        refreshWeekly:  () => Promise<string>
+        refreshMonthly: (yearMonth?: string) => Promise<string>
+        refreshPerson:  (slug: string) => Promise<void>
         getData:        (slug: string) => Promise<string | null>
+        getHistorico:   (slug: string) => Promise<Record<string, ExternalHistoricoEntry> | null>
         listReports:    () => Promise<Array<{ name: string; date: string; size: number }>>
         getReport:      (path: string) => Promise<string>
+      }
+
+      github: {
+        syncTeamRepos: () => Promise<{ success: boolean; repos?: string[]; error?: string }>
       }
     }
   }

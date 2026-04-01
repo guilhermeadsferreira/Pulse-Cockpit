@@ -387,6 +387,40 @@ export class IngestionPipeline {
                 aiResult.data_artefato,
               )
               this.log.info('sinal cerimônia aplicado', { slug, tipo: aiResult.tipo, data: aiResult.data_artefato })
+
+              // Accumulate PDI evidences from ceremony pontos_de_desenvolvimento
+              const sinalData = result.data as import('../prompts/cerimonia-sinal.prompt').CerimoniaSinalResult
+              if (sinalData.pontos_de_desenvolvimento?.length > 0) {
+                try {
+                  const registry = new PersonRegistry(this.workspacePath)
+                  const currentConfig = registry.get(slug)
+                  if (currentConfig?.pdi?.length > 0) {
+                    let pdiChanged = false
+                    for (const ponto of sinalData.pontos_de_desenvolvimento) {
+                      const pontoLower = ponto.toLowerCase()
+                      const match = currentConfig.pdi.find(p => {
+                        const objLower = p.objetivo.toLowerCase()
+                        return pontoLower.includes(objLower.split(' ').slice(0, 3).join(' '))
+                          || objLower.includes(pontoLower.split(' ').slice(0, 3).join(' '))
+                      })
+                      if (match) {
+                        if (!match.evidencias) match.evidencias = []
+                        const evidencia = `[${aiResult.data_artefato}] Cerimonia: ${ponto.slice(0, 100)}`
+                        if (!match.evidencias.includes(evidencia)) {
+                          match.evidencias.push(evidencia)
+                          pdiChanged = true
+                        }
+                      }
+                    }
+                    if (pdiChanged) {
+                      registry.save({ ...currentConfig, pdi: currentConfig.pdi })
+                      this.log.info('PDI evidencias acumuladas via cerimonia', { slug })
+                    }
+                  }
+                } catch (err) {
+                  this.log.warn('falha ao acumular evidencias PDI de cerimonia', { slug, error: err instanceof Error ? err.message : String(err) })
+                }
+              }
             } finally {
               release()
             }
@@ -528,14 +562,45 @@ export class IngestionPipeline {
 
     // Extract recent health history (last 5 entries)
     const historicoSaudeRaw = this.extractProfileSection(perfilMdRaw, 'Histórico de Saúde') || ''
-    const historicoSaude = historicoSaudeRaw
+    const historicoSaudeLines = historicoSaudeRaw
       .split('\n')
       .filter((l) => l.trim().length > 0)
-      .slice(-5)
-      .join('\n')
+    // Count 1:1 entries for the tendencia_emocional guard (T-R6.9)
+    const contagem1on1s = historicoSaudeLines.filter((l) => l.includes('1on1')).length
+    const historicoSaude = historicoSaudeLines.slice(-5).join('\n')
 
     const openActionsLideradoStr = serializeActions(openLiderado)
     const openActionsGestorStr = serializeActions(openGestor)
+
+    // Fetch external data (Jira/GitHub) before running the deep pass.
+    // ExternalDataPass.run() uses an in-memory/file cache (TTL 1h) and returns immediately
+    // when data is fresh. If cache is expired, it fetches now — ensuring the deep pass
+    // always has access to the most current external context (T-R7.1).
+    let externalData = ''
+    try {
+      const externalPass = new ExternalDataPass(this.workspacePath)
+      const snapshot = await externalPass.run(slug)
+      if (snapshot) {
+        // Serialize snapshot to YAML-like text for prompt context (same format as perfil section)
+        const lines: string[] = [`Atualizado: ${snapshot.atualizadoEm}`]
+        if (snapshot.jira) {
+          lines.push(`Jira: issues_abertas=${snapshot.jira.issuesAbertas}, workload=${snapshot.jira.workloadScore}, bugs=${snapshot.jira.bugsAtivos}, blockers=${snapshot.jira.blockersAtivos?.length ?? 0}`)
+        }
+        if (snapshot.github) {
+          lines.push(`GitHub: commits_30d=${snapshot.github.commits30d}, prs_merged=${snapshot.github.prsMerged30d}, prs_abertos=${snapshot.github.prsAbertos}, reviews=${snapshot.github.prsRevisados}, tempo_review=${snapshot.github.tempoMedioReviewDias}d`)
+        }
+        if (snapshot.insights.length > 0) {
+          lines.push(`Insights: ${snapshot.insights.map(i => `[${i.severidade}] ${i.descricao}`).join(' | ')}`)
+        }
+        externalData = lines.join('\n')
+      }
+    } catch {
+      // graceful: external data is optional context — fall back to perfil section
+      try {
+        const externalSection = this.extractProfileSection(perfilMdRaw, 'Dados Externos')
+        if (externalSection) externalData = externalSection
+      } catch { /* ignore */ }
+    }
 
     const artifactForDeep = artifactText
 
@@ -547,6 +612,7 @@ export class IngestionPipeline {
       acoesChars: openActionsLideradoStr.length + openActionsGestorStr.length,
       sinaisChars: sinaisTerceiros.length,
       historicoChars: historicoSaude.length,
+      externalChars: externalData.length,
     })
 
     const prompt = build1on1DeepPrompt({
@@ -557,6 +623,8 @@ export class IngestionPipeline {
       openActionsGestor: openActionsGestorStr,
       sinaisTerceiros,
       historicoSaude,
+      contagem1on1s,
+      externalData: externalData || undefined,
       today: new Date().toISOString().slice(0, 10),
       managerName: settings.managerName ?? undefined,
     })
@@ -629,7 +697,82 @@ export class IngestionPipeline {
         actionReg.createFrom1on1Result(slug, oneOnOneResult, date, artifactFileName)
       }
 
-      // 4. Route acoes_gestor to DemandaRegistry (módulo Eu)
+      // Apply priority updates from deep pass
+      if (oneOnOneResult.prioridade_atualizada?.length > 0) {
+        const currentActions = actionReg.list(slug)
+        let prioChanged = false
+        for (const prio of oneOnOneResult.prioridade_atualizada) {
+          const action = currentActions.find(a => a.id === prio.acao_id)
+          if (action && action.prioridade !== prio.nova_prioridade) {
+            const de = action.prioridade
+            action.prioridade = prio.nova_prioridade
+            prioChanged = true
+            this.log.info('prioridade atualizada via deep pass', {
+              slug,
+              actionId: prio.acao_id,
+              de,
+              para: prio.nova_prioridade,
+              motivo: prio.motivo,
+            })
+          }
+        }
+        if (prioChanged) {
+          actionReg.saveAll(slug, currentActions)
+        }
+      }
+
+      // 4. Persist PDI updates from 1on1 analysis to config.yaml
+      if (oneOnOneResult.pdi_update?.houve_mencao_pdi) {
+        try {
+          const currentConfig = registry.get(slug)
+          if (currentConfig) {
+            let pdiChanged = false
+            const pdi = [...(currentConfig.pdi || [])]
+
+            // Update status of mentioned objectives
+            if (oneOnOneResult.pdi_update.progresso_observado) {
+              for (const mencionado of oneOnOneResult.pdi_update.objetivos_mencionados) {
+                const match = pdi.find((p) =>
+                  p.objetivo.toLowerCase().includes(mencionado.toLowerCase()) ||
+                  mencionado.toLowerCase().includes(p.objetivo.toLowerCase())
+                )
+                if (match && match.status === 'nao_iniciado') {
+                  match.status = 'em_andamento'
+                  pdiChanged = true
+                }
+              }
+            }
+
+            // Add new objective if suggested
+            if (oneOnOneResult.pdi_update.novo_objetivo_sugerido) {
+              const alreadyExists = pdi.some((p) =>
+                p.objetivo.toLowerCase().includes(oneOnOneResult.pdi_update.novo_objetivo_sugerido!.toLowerCase())
+              )
+              if (!alreadyExists) {
+                pdi.push({
+                  objetivo: oneOnOneResult.pdi_update.novo_objetivo_sugerido,
+                  status: 'nao_iniciado',
+                })
+                pdiChanged = true
+              }
+            }
+
+            if (pdiChanged) {
+              registry.save({ ...currentConfig, pdi })
+              this.log.info('PDI atualizado via 1on1 deep pass', {
+                slug,
+                objetivosMencionados: oneOnOneResult.pdi_update.objetivos_mencionados,
+                novoObjetivo: oneOnOneResult.pdi_update.novo_objetivo_sugerido,
+                progresso: oneOnOneResult.pdi_update.progresso_observado,
+              })
+            }
+          }
+        } catch (err) {
+          this.log.warn('falha ao atualizar PDI', { slug, error: err instanceof Error ? err.message : String(err) })
+        }
+      }
+
+      // 5. Route acoes_gestor to DemandaRegistry (módulo Eu)
       if (oneOnOneResult.acoes_gestor.length > 0) {
         const demandaReg = new DemandaRegistry(this.workspacePath)
         const personConfig = new PersonRegistry(this.workspacePath).get(slug)
@@ -653,6 +796,60 @@ export class IngestionPipeline {
           })
         }
         this.log.info('gestor actions → Demandas', { acoesCount: oneOnOneResult.acoes_gestor.length, personName, origem })
+      }
+
+      // 5. Accumulate PDI evidences from 1:1 deep pass
+      if (oneOnOneResult.pdi_update?.houve_mencao_pdi) {
+        try {
+          const registry = new PersonRegistry(this.workspacePath)
+          const currentConfig = registry.get(slug)
+          if (currentConfig?.pdi?.length > 0 || oneOnOneResult.pdi_update.novo_objetivo_sugerido) {
+            let pdiChanged = false
+            const pdi = currentConfig?.pdi ? [...currentConfig.pdi] : []
+
+            // Accumulate evidence for mentioned objectives
+            if (oneOnOneResult.pdi_update.objetivos_mencionados?.length > 0) {
+              for (const objMencionado of oneOnOneResult.pdi_update.objetivos_mencionados) {
+                const objLower = objMencionado.toLowerCase()
+                const match = pdi.find(p => p.objetivo.toLowerCase().includes(objLower) || objLower.includes(p.objetivo.toLowerCase()))
+                if (match) {
+                  const evidenciaTexto = oneOnOneResult.pdi_update.progresso_observado
+                    ? `[${date}] ${oneOnOneResult.pdi_update.progresso_observado}`
+                    : `[${date}] Mencionado em 1:1`
+
+                  if (!match.evidencias) match.evidencias = []
+                  if (!match.evidencias.includes(evidenciaTexto)) {
+                    match.evidencias.push(evidenciaTexto)
+                    pdiChanged = true
+                  }
+
+                  // Update status to em_andamento if was nao_iniciado
+                  if (match.status === 'nao_iniciado') {
+                    match.status = 'em_andamento'
+                    pdiChanged = true
+                  }
+                }
+              }
+            }
+
+            // Create new PDI objective if suggested
+            if (oneOnOneResult.pdi_update.novo_objetivo_sugerido) {
+              pdi.push({
+                objetivo: oneOnOneResult.pdi_update.novo_objetivo_sugerido,
+                status: 'nao_iniciado',
+                evidencias: [`[${date}] Sugerido em 1:1 — ${oneOnOneResult.pdi_update.progresso_observado ?? 'objetivo identificado'}`],
+              })
+              pdiChanged = true
+            }
+
+            if (pdiChanged && currentConfig) {
+              registry.save({ ...currentConfig, pdi })
+              this.log.info('PDI evidencias acumuladas via 1:1 deep pass', { slug, pdiCount: pdi.length })
+            }
+          }
+        } catch (err) {
+          this.log.warn('falha ao acumular evidencias PDI de 1:1', { slug, error: err instanceof Error ? err.message : String(err) })
+        }
       }
     } finally {
       release()
@@ -1057,12 +1254,14 @@ export class IngestionPipeline {
         const perfil = registry.getPerfil(principalPass1)
         if (perfil && shouldRunPass2(perfil.frontmatter, text.length, principalPass1)) {
           this.log.debug('pass 2 with profile', { slug: principalPass1 })
+          const resumosAnterioresRaw = this.extractProfileSection(perfil.raw, 'Resumos Anteriores')
           const promptPass2 = buildIngestionPrompt({
             teamRegistry,
             perfilMdRaw: perfil.raw,
             artifactContent: text,
             today,
             managerName,
+            resumosAnteriores: resumosAnterioresRaw || undefined,
           })
           // Pass 2 carries the full perfil.md in context — allow up to 3× the base timeout
           const resultPass2 = await runWithProvider('ingestionPass2', settings, promptPass2, {

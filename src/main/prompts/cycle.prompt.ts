@@ -72,19 +72,28 @@ Sintetize o ciclo completo desta pessoa com base nos artefatos e no perfil acumu
   "evolucao_frente_ao_cargo": "string",
   "pontos_de_desenvolvimento": ["string"],
   "conclusao_para_calibracao": "string",
-  "flag_promovibilidade": "sim",
-  "evidencias_promovibilidade": ["string"]
+  "flag_promovibilidade": "sim|condicionado_a|nao|avaliar",
+  "condicao_promovibilidade": "string ou null",
+  "evidencias_promovibilidade": ["string"],
+  "pdi_aderencia": [{"objetivo": "string", "evidencias": ["string"], "status_atual": "nao_iniciado|em_andamento|concluido"}]
 }
 
 Regras:
-- "linha_do_tempo": até 10 eventos-chave do período em ordem cronológica. Inclua entregas, marcos, mudanças e incidentes relevantes.
+- "linha_do_tempo": entre 5 e 10 eventos-chave do período em ordem cronológica. Mínimo de 5 itens — se o período for rico, inclua até 10. Inclua entregas, marcos, mudanças, incidentes relevantes e momentos de virada (feedbacks recebidos, reconhecimentos, bloqueios superados).
 - "entregas_e_conquistas": resultados concretos, com contexto (o que foi feito, quando, qual o impacto).
 - "padroes_de_comportamento": padrões positivos e negativos observados ao longo do ciclo, com evidências. Use insights de 1:1 como fonte quando disponíveis — cite datas.
-- "evolucao_frente_ao_cargo": parágrafo narrativo (3–5 frases) descrevendo a evolução da pessoa frente ao seu nível e cargo esperado. Cite evidências e conecte com evolução do PDI quando disponível.
+- "evolucao_frente_ao_cargo": parágrafo narrativo (3–5 frases) descrevendo a evolução da pessoa frente ao seu nível e cargo esperado. OBRIGATÓRIO: ancore em expectativas do nível (use o campo "cargo" do perfil como referência). Exemplo: "Para um Sênior, espera-se autonomia técnica e influência no time — neste ciclo demonstrou X e Y, mas ainda depende de Z para atingir plenamente o nível esperado." Cite evidências concretas e conecte com evolução do PDI quando disponível.
 - "pontos_de_desenvolvimento": áreas concretas de desenvolvimento identificadas, priorizadas por múltiplas fontes (artefatos + sinais de terceiros + insights de 1:1). Convergência de fontes = evidência forte.
-- "conclusao_para_calibracao": parágrafo conclusivo (3–5 frases) pronto para ser lido no fórum. Deve incluir recomendação clara: acima das expectativas / dentro das expectativas / abaixo das expectativas. Na accountability, mencione proporção de ações cumpridas vs abandonadas quando dados de follow-up estiverem disponíveis. Inclua evidências quantitativas de dados externos (Jira, GitHub) quando disponíveis — ex: velocity, tempo de ciclo, PRs merged, code reviews.
-- "flag_promovibilidade": "sim" se há evidências claras para promoção neste ciclo, "nao" se não há, "avaliar" se há potencial mas requer mais evidências ou mais tempo. Na promovibilidade, cruze: conquistas + feedback de terceiros + PDI + tendência emocional.
-- "evidencias_promovibilidade": 3–5 bullets de evidência concreta que sustentam o flag_promovibilidade. Cada bullet deve ser autônomo e citável no fórum: descreva um fato específico (entrega, comportamento, feedback de terceiro) com data ou contexto. Se flag_promovibilidade for "nao", liste as lacunas ou áreas que ainda precisam ser demonstradas para uma futura promoção. Nunca retorne array vazio — sempre há algo a dizer.`
+- "conclusao_para_calibracao": parágrafo conclusivo (3–5 frases) pronto para ser lido no fórum. Deve incluir recomendação clara: acima das expectativas / dentro das expectativas / abaixo das expectativas. Na accountability, mencione proporção de ações cumpridas vs abandonadas quando dados de follow-up estiverem disponíveis. Dados externos (Jira, GitHub) como commits e PRs podem ser usados como CONTEXTO para tendências de volume — nunca como evidência primária de impacto ou qualidade. Ex: "velocity consistente ao longo do ciclo" é aceitável; "fez 47 commits portanto está acima das expectativas" não é.
+- "flag_promovibilidade": "sim" se há evidências claras para promoção neste ciclo, "condicionado_a" se a promoção é viável mas depende de uma condição específica não cumprida ainda, "nao" se não há evidências, "avaliar" se há potencial mas requer mais evidências ou mais tempo. Na promovibilidade, cruze: conquistas + feedback de terceiros + PDI + tendência emocional.
+- "condicao_promovibilidade": obrigatório quando flag_promovibilidade = "condicionado_a". Descreva em 1–2 frases o que falta demonstrar (ex: "Demonstrar liderança técnica em projeto de alta visibilidade no próximo ciclo" / "Resolver padrão de comunicação com stakeholders identificado nos últimos 2 ciclos"). null nos demais casos.
+- "evidencias_promovibilidade": 3–5 bullets de evidência concreta que sustentam o flag_promovibilidade. Cada bullet deve ser autônomo e citável no fórum: descreva um fato específico (entrega, comportamento, feedback de terceiro) com data ou contexto.
+  QUANDO flag = "nao": liste as lacunas que precisam ser DEMONSTRADAS antes de uma promoção. Cada gap deve incluir: (a) o comportamento esperado para o nível, (b) o que foi observado (ou não observado) no ciclo, (c) evidência comportamental concreta. NUNCA use linguagem vaga como "falta experiência" ou "não está pronto" sem evidência. Exemplos de formato correto:
+  - "Liderança técnica (esperada para Senior): não liderou nenhuma iniciativa de arquitetura de ponta a ponta no ciclo — iniciativas de refactoring foram fragmentadas e sem ownership claro"
+  - "Influência no time (esperada para Staff): feedback de 1:1 e cerimônias indica que colega X não é buscado para decisões técnicas pelo time — padrão observado em 3+ artefatos"
+  QUANDO flag = "condicionado_a": liste o que já foi demonstrado (evidências positivas) E o que ainda falta (gap comportamental específico).
+  Nunca retorne array vazio — sempre há algo a dizer.
+- "pdi_aderencia": somente se "Evolução do PDI" estiver disponível no contexto. Para cada objetivo do PDI, liste evidências concretas do período e o status avaliado (nao_iniciado/em_andamento/concluido). Se não houver PDI no contexto, omita o campo completamente.`
 
   return {
     prompt,
@@ -100,8 +109,10 @@ export interface CycleAIResult {
   evolucao_frente_ao_cargo:   string
   pontos_de_desenvolvimento:  string[]
   conclusao_para_calibracao:  string
-  flag_promovibilidade:       'sim' | 'nao' | 'avaliar'
+  flag_promovibilidade:       'sim' | 'condicionado_a' | 'nao' | 'avaliar'
+  condicao_promovibilidade?:  string | null
   evidencias_promovibilidade: string[]
+  pdi_aderencia?:             Array<{ objetivo: string; evidencias: string[]; status_atual: string }>
 }
 
 export function renderCycleMarkdown(
@@ -111,7 +122,10 @@ export function renderCycleMarkdown(
   result:        CycleAIResult,
 ): string {
   const today = new Date().toISOString().slice(0, 10)
-  const promoLabel = result.flag_promovibilidade === 'sim' ? 'Sim' : result.flag_promovibilidade === 'nao' ? 'Não' : 'Avaliar'
+  const promoLabel = result.flag_promovibilidade === 'sim' ? 'Sim'
+    : result.flag_promovibilidade === 'nao' ? 'Não'
+    : result.flag_promovibilidade === 'condicionado_a' ? 'Condicionado'
+    : 'Avaliar'
 
   const lines: string[] = [
     `# Relatório de Ciclo — ${nome}`,
@@ -127,6 +141,12 @@ export function renderCycleMarkdown(
     ``,
     `**Promovibilidade:** ${promoLabel}`,
     ``,
+    ...(result.flag_promovibilidade === 'condicionado_a' && result.condicao_promovibilidade
+      ? [
+          `**Condição:** ${result.condicao_promovibilidade}`,
+          ``,
+        ]
+      : []),
     ...(result.evidencias_promovibilidade?.length > 0
       ? [
           `**Evidências:**`,
@@ -157,6 +177,20 @@ export function renderCycleMarkdown(
     ``,
     ...result.pontos_de_desenvolvimento.map(p => `- ${p}`),
     ``,
+    ...(result.pdi_aderencia && result.pdi_aderencia.length > 0
+      ? [
+          `## Aderência ao PDI`,
+          ``,
+          ...result.pdi_aderencia.map(p => {
+            const statusLabel = p.status_atual === 'concluido' ? '✅ Concluído'
+              : p.status_atual === 'em_andamento' ? '🔄 Em andamento'
+              : '⏳ Não iniciado'
+            const evStr = p.evidencias.map(e => `  - ${e}`).join('\n')
+            return `### ${p.objetivo}\n**Status:** ${statusLabel}\n${evStr}`
+          }),
+          ``,
+        ]
+      : []),
   ]
 
   return lines.join('\n')

@@ -1,131 +1,100 @@
-# Roadmap: Pulse Cockpit V2.1
+# Roadmap: Pulse Cockpit — Revisao Extensiva
 
-**Milestone:** V2.1 — Completar camada UI e prompts da V2
-**Created:** 2026-03-26
-**Granularity:** Coarse
-**Coverage:** 6/6 requirements mapped
+## Overview
 
----
+Este milestone fecha os 35 gaps remanescentes da revisao extensiva (de 101 identificados, 66 ja corrigidos). O trabalho e cirurgico: refinar prompts que afetam toda ingestao, corrigir pipeline e schema, adicionar metricas GitHub avancadas no CrossAnalyzer, e entregar o action system e UX avancados. Cada fase e independente e entregavel — o gestor sente o impacto desde a Phase 1.
 
 ## Phases
 
-- [ ] **Phase 1: PersonView Intelligence** — Exibir dados V2 (insights de 1:1, sinais de terceiros, botão QR) no perfil de cada liderado
-- [ ] **Phase 2: Settings Reingest UX** — Reingestão em batch com modal de confirmação, progress bar e backup antes de deletar
-- [ ] **Phase 3: Enriched Prompts** — Pauta roll-up com gestor consumindo tendências/correlações/riscos compostos; autoavaliação consumindo campos V2
+**Phase Numbering:**
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
----
+- [x] **Phase 1: Prompt Refinements** - Refinar os 17 prompts de ingestao, 1:1 deep, cerimonia, compression, cycle, autoavaliacao e Gemini (completed 2026-03-31)
+- [ ] **Phase 2: Pipeline & Schema** - Corrigir deduplicacao de temas, cleanup de health history e IPC tipado
+- [ ] **Phase 3: GitHub Metrics & CrossAnalyzer** - Adicionar metricas de code review, colaboracao e test coverage; enriquecer CrossAnalyzer e relatorios
+- [ ] **Phase 4: Action System & UX Avancado** - Sync Jira bidirecional, audit trail, escalation, PDI evidence aggregation e insights cross-team
 
 ## Phase Details
 
-### Phase 1: PersonView Intelligence
+### Phase 1: Prompt Refinements
+**Goal**: Todo artefato gerado pelo pipeline reflete calibracao por cargo/nivel, evidencias nao triviais e deteccao precoce de problemas
+**Depends on**: Nothing (first phase)
+**Requirements**: PRMT-01, PRMT-02, PRMT-03, PRMT-04, PRMT-05, PRMT-06, PRMT-07, PRMT-08, PRMT-09, PRMT-10, PRMT-11, PRMT-12, PRMT-13, PRMT-14, PRMT-15, PRMT-16, PRMT-17
+**Success Criteria** (what must be TRUE):
+  1. Ao ingerir uma cerimonia, o pipeline registra ausencias esperadas (campo `pessoas_esperadas_ausentes`) e detecta stagnation precoce nos primeiros 3 meses
+  2. O perfil de um Staff silencioso numa cerimonia nao recebe o mesmo alerta de participacao que um Junior — saude calibrada por cargo/nivel
+  3. Ao comprimir historico, conquistas mantêm o formato "titulo — outcome" e pontos resolvidos usam definicao unica (strikethrough ou contradicao por evidencia)
+  4. O relatorio de ciclo gera linha_do_tempo com 5-10 eventos significativos, expectativas benchmarked por cargo e evidencias de promovibilidade com comportamento observado concreto
+  5. O modo do Gemini e determinado pelo conteudo (num_speakers), captura conteudo emocional em full mode e registra confidence de speaker identification como metadata
+**Plans**: 5 plans
 
-**Goal:** O gestor consegue ver, na tela de perfil de cada liderado, os insights extraídos do Pass de 1:1 e os sinais captados em cerimônias — e consegue copiar o resumo executivo de um 1:1 para o clipboard com um clique.
-**Depends on:** Nothing (dados já existem em `perfil.md` v5; é pura exibição)
-**Requirements:** UI-01, UI-02, UI-03
+Plans:
+- [x] 01-01-PLAN.md — Auditar/confirmar PRMT-01 a PRMT-07 (ingestion, 1on1-deep, cerimonia-sinal, compression)
+- [x] 01-02-PLAN.md — Auditar PRMT-08, PRMT-09 e implementar PRMT-10 (cycle.prompt.ts)
+- [x] 01-03-PLAN.md — Implementar PRMT-11, PRMT-12 (autoavaliacao.prompt.ts)
+- [x] 01-04-PLAN.md — Implementar PRMT-13, PRMT-14, PRMT-15 (gemini-preprocessing.prompt.ts)
+- [x] 01-05-PLAN.md — Implementar PRMT-16, PRMT-17 (gestor-ciclo.prompt.ts)
 
-#### Plans
+### Phase 2: Pipeline & Schema
+**Goal**: O pipeline persiste dados sem duplicatas, mantem health history enxuto e retorna dados externos com tipagem segura
+**Depends on**: Phase 1
+**Requirements**: PIPE-01, PIPE-02, PIPE-03
+**Success Criteria** (what must be TRUE):
+  1. Temas semanticamente equivalentes (substring/keyword match) sao mesclados automaticamente antes de persistir no perfil — sem duplicatas visiveis na UI
+  2. O arquivo health history nunca ultrapassa 50 entradas ativas; entradas mais antigas sao comprimidas automaticamente sem perda de tendencia
+  3. Dados externos (Jira, GitHub) chegam ao frontend como JSON tipado, eliminando parsing regex fragil no renderer
+**Plans**: 2 plans
 
-1. **Insights de 1:1 + Sinais de Terceiros** — Adicionar seções "Insights de 1:1" e "Sinais de Terceiros" em `PersonView.tsx`, lendo dados do `perfil.md` via IPC `person:getPerfil` e renderizando em ordem cronológica reversa. Incluir estado vazio quando os campos ainda não existirem (perfis sem Pass 2 rodado).
-2. **Copiar QR** — Adicionar botão "Copiar para QR" nos artefatos de 1:1 em `PersonView.tsx`. O botão copia o campo `resumo_executivo_qr` do artefato para o clipboard via `navigator.clipboard.writeText()`. Renderizar apenas quando o campo existir no artefato.
+Plans:
+- [x] 02-01-PLAN.md — Fuzzy theme dedup + health history auto-compression (PIPE-01, PIPE-02)
+- [x] 02-02-PLAN.md — Typed external data IPC with validation (PIPE-03)
 
-**Verification:**
-- Abrir o perfil de um liderado com 1:1 ingerido após V2 → seção "Insights de 1:1" exibe entradas em ordem decrescente
-- Abrir o perfil de um liderado com reunião coletiva ingerida após V2 → seção "Sinais de Terceiros" exibe sinais e correlações
-- Perfis sem dados V2 exibem estado vazio legível, sem crash
-- Clicar "Copiar para QR" em um artefato de 1:1 → texto do resumo executivo vai para o clipboard; botão não aparece em artefatos sem esse campo
+### Phase 3: GitHub Metrics & CrossAnalyzer
+**Goal**: O gestor ve metricas de qualidade de code review, colaboracao e cobertura de testes, com insights do CrossAnalyzer contextualizados e relatorios com narrativa e baseline pessoal
+**Depends on**: Phase 2
+**Requirements**: MTRC-01, MTRC-02, MTRC-03, MTRC-04, MTRC-05, MTRC-06, MTRC-07
+**Success Criteria** (what must be TRUE):
+  1. A aba de dados externos exibe avgCommentsPerReview, turnaround de primeira review, approval rate, collaboration score e % de PRs com mudancas de teste — com trend historico
+  2. Insights do CrossAnalyzer incluem campo `causa_raiz` (awaiting review / changes requested / stale) e checam ausencias/ferias do perfil antes de flaggar desalinhamento
+  3. Relatorios externos incluem um paragrafo de contexto narrativo injetado do perfil e uma comparacao com a media pessoal dos ultimos 3 meses
+**Plans**: 3 plans
 
+Plans:
+- [x] 03-01-PLAN.md — Estender GitHubClient e GitHubMetrics com metricas avancadas (MTRC-01, MTRC-02, MTRC-03)
+- [x] 03-02-PLAN.md — Enriquecer CrossAnalyzer com causa_raiz e checagem de ausencia (MTRC-04, MTRC-05)
+- [x] 03-03-PLAN.md — Narrativa, baseline 3 meses nos relatorios e novas metricas na UI (MTRC-06, MTRC-07)
+
+### Phase 4: Action System & UX Avancado
+**Goal**: Acoes se sincronizam com Jira, tem historico auditavel e prioridade automatica; o gestor ve insights cross-team e pauta pre-1:1 gerada automaticamente
+**Depends on**: Phase 3
+**Requirements**: ACTN-01, ACTN-02, ACTN-03, ACTN-04, ACTN-05, UX-01, UX-02, UX-03
+**Success Criteria** (what must be TRUE):
+  1. Uma issue fechada no Jira fecha automaticamente a acao correspondente no app sem intervencao manual
+  2. Cada acao tem array `statusHistory[]` auditavel e sua prioridade e atualizada automaticamente pelo deep pass quando novo contexto surge
+  3. O Dashboard exibe padroes detectados em multiplos perfis (insights cross-team) e o risk panel mostra pares e gestores alem de liderados
+  4. A pauta de 1:1 e gerada automaticamente N dias antes do proximo encontro sem o gestor precisar acionar manualmente
+**Plans**: 5 plans
 **UI hint**: yes
 
-### Phase 2: Settings Reingest UX
-
-**Goal:** O gestor consegue disparar reingestão em batch na tela de Settings com uma UX segura: modal de confirmação explícita, progress bar em tempo real, e garantia de que nenhum dado é deletado sem backup.
-**Depends on:** Nothing (IPC handlers `list-processados`, `reset-data`, `batch-reingest` já existem; concern C1 e C3 precisam ser endereçados aqui)
-**Requirements:** SET-01
-
-#### Plans
-
-1. **Backup + Reingest flow** — Antes de chamar `reset-data`, acionar IPC de backup que copia `pessoas/` para `~/.pulsecockpit/backups/YYYY-MM-DD-HH-mm/` (resolve concern C1). Expor os eventos `ingestion:batch-progress` e `ingestion:batch-completed` no `preload/index.ts` e no `global.d.ts` (resolve concern C3 parcialmente — o suficiente para o progress bar funcionar). Adicionar modal de confirmação com texto descritivo do risco + path do backup + botão destrutivo explícito.
-2. **Progress bar em `SettingsView`** — Conectar `SettingsView.tsx` aos eventos de progresso expostos no plano anterior. Exibir barra de progresso com contador (N/Total), nome do artefato sendo processado, e estado final (concluído / erro). Desabilitar navegação durante o processo para evitar interrupção acidental.
-
-**Verification:**
-- Clicar "Reingerir Tudo" → modal abre com aviso de risco e caminho do backup
-- Confirmar no modal → backup de `pessoas/` é criado antes de qualquer deleção
-- Durante a reingestão → progress bar avança em tempo real com contagem de artefatos
-- Ao concluir → exibir resumo (N artefatos processados, M erros se houver)
-- Se fechar o app durante a reingestão → backup persiste em disco
-
-**UI hint**: yes
-
-### Phase 3: Enriched Prompts
-
-**Goal:** A pauta com o gestor (roll-up do time) exibe tendências emocionais, correlações entre liderados e riscos compostos; e o prompt de autoavaliação do gestor consome os campos V2 (feedback_dado, tendência emocional, accountability de ações).
-**Depends on:** Nothing (leitura de dados já existentes no `perfil.md`; mudanças cirúrgicas nos arquivos de prompt)
-**Requirements:** PMPT-01, PMPT-02
-
-#### Plans
-
-1. **Roll-up enriquecido (PMPT-01)** — Atualizar o handler `index.ts:233` (TODO Fase 5) e o prompt de agenda do gestor para incluir: array de `tendencia_emocional` por liderado, sinais compartilhados entre múltiplos liderados (correlações), e pessoas com múltiplos flags de risco simultâneos (riscos compostos). Atualizar `AgendaGestorAIResult` com os novos campos tipados.
-2. **Autoavaliação V2 (PMPT-02)** — Atualizar `src/main/prompts/autoavaliacao.prompt.ts` para consumir: `insights_1on1.feedback_dado` (o que o gestor prometeu de feedback e entregou), `tendencia_emocional` de cada liderado no ciclo, e `acoes_gestor` com `ciclos_sem_mencao` elevado (accountability). Enriquecer a seção de evidências gerada com esses dados.
-
-**Verification:**
-- Gerar pauta com o gestor → seção de tendências emocionais do time aparece com dados de pelo menos um liderado
-- Gerar pauta com o gestor → se dois ou mais liderados têm sinais correlacionados, a pauta os menciona explicitamente
-- Gerar pauta com o gestor → pessoas com múltiplos riscos aparecem destacadas como "risco composto"
-- Gerar autoavaliação → documento inclui seção de feedback dado a liderados com base em `feedback_dado`
-- Gerar autoavaliação → documento inclui análise de accountability do gestor (ações com `ciclos_sem_mencao > 1`)
-
----
-
-## Success Criteria
-
-V2.1 está completo quando:
-
-1. A tela de perfil de qualquer liderado com histórico V2 exibe "Insights de 1:1" e "Sinais de Terceiros" sem erros
-2. O botão "Copiar para QR" está disponível em artefatos de 1:1 que têm o campo `resumo_executivo_qr`
-3. A reingestão em batch na SettingsView executa com modal, backup obrigatório e progress bar funcional
-4. A pauta roll-up com o gestor inclui tendências, correlações e riscos compostos do time
-5. A autoavaliação do gestor inclui evidências de feedback dado e accountability de ações comprometidas
-
----
-
-## Requirement Coverage
-
-| Requirement | Phase | Plans |
-|-------------|-------|-------|
-| UI-01 | Phase 1 | Plan 1 (Insights de 1:1 + Sinais de Terceiros) |
-| UI-02 | Phase 1 | Plan 1 (Insights de 1:1 + Sinais de Terceiros) |
-| UI-03 | Phase 1 | Plan 2 (Copiar QR) |
-| SET-01 | Phase 2 | Plan 1 (Backup + Reingest flow) + Plan 2 (Progress bar) |
-| PMPT-01 | Phase 3 | Plan 1 (Roll-up enriquecido) |
-| PMPT-02 | Phase 3 | Plan 2 (Autoavaliação V2) |
-
-**Total:** 6/6 requirements mapped. No orphans.
-
----
+Plans:
+- [ ] 04-01-PLAN.md — Audit trail (statusHistory[]) + sync bidirecional Jira (ACTN-03, ACTN-01)
+- [ ] 04-02-PLAN.md — Escalation de acoes gestor + prioridade via deep pass (ACTN-02, ACTN-04)
+- [ ] 04-03-PLAN.md — Evidence aggregation para PDI (ACTN-05)
+- [ ] 04-04-PLAN.md — Cross-team insights + risk panel estendido (UX-01, UX-02)
+- [ ] 04-05-PLAN.md — Agenda generation agendada pre-1:1 (UX-03)
 
 ## Progress
 
+**Execution Order:**
+Phases execute in numeric order: 1 → 2 → 3 → 4
+
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. PersonView Intelligence | 0/2 | Not started | - |
-| 2. Settings Reingest UX | 0/2 | Not started | - |
-| 3. Enriched Prompts | 0/2 | Not started | - |
-
----
-
-## Safety Notes
-
-These constraints apply to every plan in this roadmap:
-
-- **No schema changes.** `perfil.md` v5 is the current schema. All plans read existing fields only — no new fields, no migrations.
-- **No backend changes.** IPC handlers for ingestion already exist. Phase 1 and 3 are renderer-only changes. Phase 2 adds preload exposure of existing events (not new handlers).
-- **Backup before delete.** Phase 2 must create a timestamped backup of `pessoas/` before any `reset-data` call. This is non-negotiable (concern C1 from CONCERNS.md).
-- **Surgical edits only.** Zero test coverage means every change must be minimal in surface area. No refactors bundled with feature work.
-- **Concerns addressed as side-effects:** Phase 2 partially resolves C1 (backup) and C3 (preload event exposure for batch progress). These are not optional — they are required for SET-01 to be safe and functional.
-
----
-
-*Last updated: 2026-03-27*
+| 1. Prompt Refinements | 5/5 | Complete | 2026-03-31 |
+| 2. Pipeline & Schema | 2/2 | Complete | 2026-03-31 |
+| 3. GitHub Metrics & CrossAnalyzer | 3/3 | Complete | 2026-03-31 |
+| 4. Action System & UX Avancado | 5/5 | Complete | 2026-04-01 |
 
 ---
 
