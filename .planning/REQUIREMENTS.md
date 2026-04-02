@@ -130,9 +130,9 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 
 ### Sustentacao Alertas Proativos (Phase 999.14)
 
-- [ ] **ALRT-01**: `SustentacaoAlerta` tipo exportado em ipc.ts com campos `tipo` (4 valores), `mensagem` e `severidade` ('critico' | 'atencao'); `SupportBoardSnapshot` estendido com `alertas: SustentacaoAlerta[]`
-- [ ] **ALRT-02**: `calcularAlertas()` exportada no SupportBoardClient — recebe snapshot + history[] + issues[] + slaThresholds; retorna `SustentacaoAlerta[]` calculando as 4 condicoes (breach crescente, ticket envelhecendo, fila crescendo, spike de incidente) com defaults fixos
-- [ ] **ALRT-03**: IPC handler `fetchAndCacheSustentacao` chama `calcularAlertas()` apos montar snapshot e inclui resultado em `snapshot.alertas` antes de retornar ao renderer
+- [x] **ALRT-01**: `SustentacaoAlerta` tipo exportado em ipc.ts com campos `tipo` (4 valores), `mensagem` e `severidade` ('critico' | 'atencao'); `SupportBoardSnapshot` estendido com `alertas: SustentacaoAlerta[]`
+- [x] **ALRT-02**: `calcularAlertas()` exportada no SupportBoardClient — recebe snapshot + history[] + issues[] + slaThresholds; retorna `SustentacaoAlerta[]` calculando as 4 condicoes (breach crescente, ticket envelhecendo, fila crescendo, spike de incidente) com defaults fixos
+- [x] **ALRT-03**: IPC handler `fetchAndCacheSustentacao` chama `calcularAlertas()` apos montar snapshot e inclui resultado em `snapshot.alertas` antes de retornar ao renderer
 - [ ] **ALRT-04**: Sidebar exibe badge dot vermelho no item Sustentacao quando `snapshot.alertas.length > 0`; badge some automaticamente quando alertas zerados; estado carregado via IPC sustentacao:get-data no mount
 - [ ] **ALRT-05**: SustentacaoView exibe banner inline logo abaixo do header quando `snapshot.alertas.length > 0`; banner lista cada alerta com icone e mensagem; some automaticamente apos refresh sem alertas
 

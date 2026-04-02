@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-last_updated: "2026-04-02T18:34:53.079Z"
+status: Executing Phase 999.14
+last_updated: "2026-04-02T18:47:45.975Z"
 progress:
   total_phases: 16
   completed_phases: 10
   total_plans: 34
-  completed_plans: 32
+  completed_plans: 33
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -18,7 +18,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Core value:** O contexto acumulado ao longo do ciclo deve estar acessível para o gestor na hora que importa: na tela do perfil, na pauta e no relatório de calibração.
-**Current focus:** Phase 999.13 — sustentacao-intel-operacional-por-pessoa
+**Current focus:** Phase 999.14 — sustentacao-alertas-proativos
 
 ## Current Status
 
@@ -95,6 +95,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.13]: IN_OUT_SEMANAS=8 como constante — janela padrao de 8 semanas para visibilidade de tendencia na UI
 - [Phase 999.13]: IntelOperacionalSection inserida entre Evolucao e Analise de IA — fluxo narrativo: snapshot, tendencia, diagnostico IA
 - [Phase 999.13]: Distribuicao por Tipo standalone removida e integrada ao sub-bloco 3 de IntelOperacionalSection — elimina duplicacao e agrupa inteligencia em local unico
+- [Phase 999.14]: fetchSupportBoardMetricsWithIssues como variante interna — preserva assinatura publica de fetchSupportBoardMetrics (retorna alertas: [])
+- [Phase 999.14]: Cache hit usa issues=[] para calcularAlertas — D-07 silencioso em cache, D-04/D-05/D-06 funcionam normalmente
+- [Phase 999.14]: Thresholds fixos no SupportBoardClient (ALRT_BREACH_DELTA=2, ALRT_SLA_MULTIPLIER=2, ALRT_FILA_DAYS=3, ALRT_SPIKE_COUNT=3) — nao configuravel nesta fase
 
 ## Phases
 
@@ -147,6 +150,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 999.12 P02 | 180 | 2 tasks | 2 files |
 | Phase 999.13 P01 | 157 | 2 tasks | 2 files |
 | Phase 999.13 P02 | 294 | 1 tasks | 2 files |
+| Phase 999.14 P01 | 4min | 2 tasks | 3 files |
 
 ## Next Action
 
