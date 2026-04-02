@@ -123,8 +123,8 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 
 ### Sustentacao Intel Operacional (Phase 999.13)
 
-- [ ] **INTEL-01**: SupportBoardSnapshot estendido com `inOutSemanal: InOutSemanalEntry[]` (vazao semanal in/out, ultimas 8 semanas) calculado no SupportBoardClient a partir dos issues dos ultimos 90d
-- [ ] **INTEL-02**: SupportBoardSnapshot estendido com `recorrentesDetectados: RecorrenteDetectado[]` (tipo+label com >2 ocorrencias nos ultimos 30d) — logica deterministica, sem IA; topTipos inclui tickets fechados 30d alem dos abertos
+- [x] **INTEL-01**: SupportBoardSnapshot estendido com `inOutSemanal: InOutSemanalEntry[]` (vazao semanal in/out, ultimas 8 semanas) calculado no SupportBoardClient a partir dos issues dos ultimos 90d
+- [x] **INTEL-02**: SupportBoardSnapshot estendido com `recorrentesDetectados: RecorrenteDetectado[]` (tipo+label com >2 ocorrencias nos ultimos 30d) — logica deterministica, sem IA; topTipos inclui tickets fechados 30d alem dos abertos
 - [ ] **INTEL-03**: SustentacaoView exibe secao "Inteligencia Operacional" com grafico in/out semanal (SVG barras inline) e curva historica de backlog (MiniLineChart com ticketsAbertos do history[])
 - [ ] **INTEL-04**: Secao "Inteligencia Operacional" exibe top tipos expandidos (abertos+fechados 30d) e lista de recorrentes com alerta visual "Candidato a raiz — Nx em 30d"; secao nao renderiza quando sem dados
 

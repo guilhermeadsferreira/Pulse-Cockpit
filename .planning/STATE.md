@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-last_updated: "2026-04-02T16:59:38.428Z"
+status: Executing Phase 999.13
+last_updated: "2026-04-02T18:17:51.255Z"
 progress:
   total_phases: 16
   completed_phases: 9
-  total_plans: 30
-  completed_plans: 30
+  total_plans: 34
+  completed_plans: 31
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -18,7 +18,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Core value:** O contexto acumulado ao longo do ciclo deve estar acessível para o gestor na hora que importa: na tela do perfil, na pauta e no relatório de calibração.
-**Current focus:** Phase 999.12 — sustentacao-reports-cruzamento-produtividade
+**Current focus:** Phase 999.13 — sustentacao-intel-operacional-por-pessoa
 
 ## Current Status
 
@@ -90,6 +90,9 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.12]: Cruzamento porAssignee usa slug como chave, fallback para slug bruto quando pessoa não encontrada
 - [Phase 999.12]: writeSustentacaoWeekly usa tabela markdown com retention por contagem de linhas — dados de suporte são tabulares por natureza
 - [Phase 999.12]: Seção Sustentação adicionada após Resumo do Time no Weekly — hierarquia visual: sumário do time primeiro, detalhe de suporte depois
+- [Phase 999.13]: topTipos agora inclui abertos + fechados dos ultimos 30d (nao so abertos) — reflete melhor o volume real de trabalho
+- [Phase 999.13]: labelCounts e assigneeCounts mantidos apenas sobre tickets abertos — representam carga atual, nao historico
+- [Phase 999.13]: IN_OUT_SEMANAS=8 como constante — janela padrao de 8 semanas para visibilidade de tendencia na UI
 
 ## Phases
 
@@ -140,6 +143,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 999.11 P03 | 100s | 1 tasks | 1 files |
 | Phase 999.12 P01 | 2min | 2 tasks | 3 files |
 | Phase 999.12 P02 | 180 | 2 tasks | 2 files |
+| Phase 999.13 P01 | 157 | 2 tasks | 2 files |
 
 ## Next Action
 

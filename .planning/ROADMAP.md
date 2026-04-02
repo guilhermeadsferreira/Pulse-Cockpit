@@ -203,11 +203,11 @@ Plans:
 
 **Goal:** Inteligência operacional da operação de sustentação: vazão semanal (in/out), curva histórica de backlog, top tipos por frequência (abertos + fechados), detecção de recorrência (candidatos a resolver na raiz). Visualização na SustentacaoView existente.
 **Requirements:** INTEL-01, INTEL-02, INTEL-03, INTEL-04
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 **Note:** Gap coberto: sem inteligência operacional. Fase C — independente de B, depende de A (trending histórico para curva de backlog).
 
 Plans:
-- [ ] 999.13-01-PLAN.md — Tipos InOutSemanalEntry + RecorrenteDetectado + cálculos no SupportBoardClient (INTEL-01, INTEL-02)
+- [x] 999.13-01-PLAN.md — Tipos InOutSemanalEntry + RecorrenteDetectado + cálculos no SupportBoardClient (INTEL-01, INTEL-02)
 - [ ] 999.13-02-PLAN.md — Seção "Inteligência Operacional" na SustentacaoView (INTEL-03, INTEL-04)
 
 ### Phase 999.14: Sustentação — Alertas proativos
