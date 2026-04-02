@@ -114,7 +114,7 @@ Plans:
 
 **Goal:** Módulo standalone de Sustentação no app — tela própria na sidebar, visão do board Jira de suporte com métricas de volume, SLA breach e análise de IA. Insumos fluem para o metricas.md das pessoas por assignee.
 **Requirements:** SUST-01, SUST-02, SUST-03, SUST-04, SUST-05
-**Plans:** 5/6 plans executed
+**Plans:** 6/6 plans complete
 
 Plans:
 - [x] 999.5-01-PLAN.md — Contratos de tipos: SupportBoardSnapshot, AppSettings campos, ViewName (SUST-01, SUST-02)
@@ -122,7 +122,7 @@ Plans:
 - [x] 999.5-03-PLAN.md — SettingsView: campos de configuração do board de sustentação (SUST-02)
 - [x] 999.5-04-PLAN.md — IPC handlers sustentacao:get-data e sustentacao:refresh + preload (SUST-01, SUST-03)
 - [x] 999.5-05-PLAN.md — SustentacaoView + Sidebar + App.tsx wiring (SUST-04)
-- [ ] 999.5-06-PLAN.md — Prompt de IA + MetricsWriter.writeSustentacaoAnalysis + IPC run-analysis (SUST-03, SUST-05)
+- [x] 999.5-06-PLAN.md — Prompt de IA + MetricsWriter.writeSustentacaoAnalysis + IPC run-analysis (SUST-03, SUST-05)
 
 ### Phase 999.6: Dashboard de métricas do time — Git + Jira (BACKLOG)
 

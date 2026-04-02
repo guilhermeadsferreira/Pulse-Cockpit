@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 999.5
-last_updated: "2026-04-02T01:30:02.771Z"
+last_updated: "2026-04-02T03:11:31.528Z"
 progress:
   total_phases: 9
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -74,6 +74,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.5]: runAnalysis adicionado no preload prevendo Plan 06 (prompt IA) — handler sera criado naquele plan
 - [Phase 999.5-05]: Wrench (lucide-react) como ícone de Sustentação na Sidebar
 - [Phase 999.5-05]: SustentacaoView com 3 estados: loading, não-configurado (onboarding) e dados carregados
+- [Phase 999.5]: fetchAndCacheSustentacao reutilizada no handler run-analysis — evita chamada duplicada ao Jira
+- [Phase 999.5]: SIGNIFICANT_TICKET_THRESHOLD=3 para filtrar assignees com tickets relevantes na análise de sustentação
 
 ## Phases
 
@@ -116,6 +118,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 999.5 P03 | 60 | 1 tasks | 1 files |
 | Phase 999.5 P04 | 2min | 2 tasks | 2 files |
 | Phase 999.5 P05 | 104 | 2 tasks | 3 files |
+| Phase 999.5 P06 | 15min | 2 tasks | 3 files |
 
 ## Next Action
 
