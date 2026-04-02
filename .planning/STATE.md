@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Phase 04 Complete
-last_updated: "2026-04-01T13:00:00Z"
+last_updated: "2026-04-02T00:05:45.403Z"
 progress:
-  total_phases: 7
-  completed_phases: 5
-  total_plans: 11
-  completed_plans: 11
+  total_phases: 8
+  completed_phases: 4
+  total_plans: 15
+  completed_plans: 15
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -58,6 +58,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 04-05]: generateAgendaForPerson carrega settings internamente para obter openRouter config
 - [Phase 04-04]: CrossTeamInsightsPanel inline no DashboardView para manter consistencia com pattern existente
 - [Phase 04-04]: TeamRiskPanel removido do guard relacao === liderado para ser visivel para pares e gestores
+- [Phase 999.7]: Sprint entregas array vazio — dados individuais nao disponiveis no snapshot
+- [Phase 999.7]: Deltas vs mes anterior calculados inline usando previous.commits30d e previous.prsMerged30d
 
 ## Phases
 
@@ -93,6 +95,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | 04 | 01 | 2min | 2/2 | 3 |
 | 04 | 03 | 3min | 1/1 | 2 |
 | 04 | 05 | 140s | 1/1 | 2 |
+| Phase 999.7 P02 | 120 | 2 tasks | 2 files |
 
 ## Next Action
 
