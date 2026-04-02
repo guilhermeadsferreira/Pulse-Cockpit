@@ -48,11 +48,12 @@ export interface MomentoAtualEntry {
 // ── Section delimiters ─────────────────────────────────────────
 
 const SECTIONS = {
-  MOMENTO_ATUAL: { open: '<!-- METRICAS:MOMENTO_ATUAL -->', close: '<!-- FIM:MOMENTO_ATUAL -->' },
-  ALERTAS:       { open: '<!-- METRICAS:ALERTAS -->',       close: '<!-- FIM:ALERTAS -->' },
-  SEMANAS:       { open: '<!-- METRICAS:SEMANAS -->',       close: '<!-- FIM:SEMANAS -->' },
-  SPRINTS:       { open: '<!-- METRICAS:SPRINTS -->',       close: '<!-- FIM:SPRINTS -->' },
-  MESES:         { open: '<!-- METRICAS:MESES -->',         close: '<!-- FIM:MESES -->' },
+  MOMENTO_ATUAL:      { open: '<!-- METRICAS:MOMENTO_ATUAL -->',      close: '<!-- FIM:MOMENTO_ATUAL -->' },
+  ALERTAS:            { open: '<!-- METRICAS:ALERTAS -->',            close: '<!-- FIM:ALERTAS -->' },
+  SEMANAS:            { open: '<!-- METRICAS:SEMANAS -->',            close: '<!-- FIM:SEMANAS -->' },
+  SPRINTS:            { open: '<!-- METRICAS:SPRINTS -->',            close: '<!-- FIM:SPRINTS -->' },
+  MESES:              { open: '<!-- METRICAS:MESES -->',              close: '<!-- FIM:MESES -->' },
+  SUSTENTACAO_ANALISE: { open: '<!-- METRICAS:SUSTENTACAO_ANALISE -->', close: '<!-- FIM:SUSTENTACAO_ANALISE -->' },
 } as const
 
 type SectionKey = keyof typeof SECTIONS
@@ -196,6 +197,16 @@ export class MetricsWriter {
     content = this.replaceSection(content, 'MOMENTO_ATUAL', newSection)
     writeFileSync(filePath, content, 'utf-8')
     log.debug('momento atual atualizado', { slug })
+  }
+
+  writeSustentacaoAnalysis(slug: string, analysis: string): void {
+    const filePath = this.ensureFile(slug)
+    const content = readFileSync(filePath, 'utf-8')
+    const date = new Date().toISOString().slice(0, 10)
+    const rendered = `**Análise de Sustentação — ${date}**\n\n${analysis}`
+    const updated = this.replaceSection(content, 'SUSTENTACAO_ANALISE', rendered)
+    writeFileSync(filePath, updated, 'utf-8')
+    log.info('MetricsWriter: sustentação análise salva', { slug })
   }
 
   // ── Section management (private) ──────────────────────────
