@@ -97,10 +97,10 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 
 ### Pipeline Health & Flow Metrics (Phase 999.9)
 
-- [ ] **PLHF-01**: categorizeStatus retorna 6 categorias finas (queue_dev, dev, queue_review, review, qa, queue_deploy) distinguindo fila de trabalho ativo
-- [ ] **PLHF-02**: Secao Pipeline Health no daily report com tabela: Fase, Tasks, Tempo medio, Mais antiga, Baseline (sprint), Status
-- [ ] **PLHF-03**: Baseline historico por fase computado on-the-fly a partir das done tasks do sprint via changelog
-- [ ] **PLHF-04**: Status emoji (ok/warning/critical) conforme thresholds: Dev 5d, CR 3d, QA 3d, Ready to Deploy 2d
+- [x] **PLHF-01**: categorizeStatus retorna 6 categorias finas (queue_dev, dev, queue_review, review, qa, queue_deploy) distinguindo fila de trabalho ativo
+- [x] **PLHF-02**: Secao Pipeline Health no daily report com tabela: Fase, Tasks, Tempo medio, Mais antiga, Baseline (sprint), Status
+- [x] **PLHF-03**: Baseline historico por fase computado on-the-fly a partir das done tasks do sprint via changelog
+- [x] **PLHF-04**: Status emoji (ok/warning/critical) conforme thresholds: Dev 5d, CR 3d, QA 3d, Ready to Deploy 2d
 - [ ] **PLHF-05**: Commits compactados por repo na secao "O que fez ontem" (contagem em vez de listing individual)
 - [ ] **PLHF-06**: PRs merged e reviews mantidos como itens individuais; review comments substantivos (> 20 chars) preservados
 - [ ] **PLHF-07**: Haiku analysis recebe dados de Pipeline Health como input e gera insights sobre gargalos do pipeline
