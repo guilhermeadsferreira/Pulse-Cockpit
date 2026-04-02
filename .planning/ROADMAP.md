@@ -154,3 +154,13 @@ Plans:
 
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
+
+### Phase 999.9: Pipeline Health & Flow Metrics no Daily Report (BACKLOG)
+
+**Goal:** O daily report mostra saúde do pipeline por fase (Dev, CR, QA, Ready to Deploy) com tempo médio atual vs baseline histórico, distingue fila vs trabalho ativo (To Do CR vs CR), identifica gargalos automaticamente, e reduz ruído das seções de baixo valor.
+**Requirements:** TBD
+**Plans:** 0 plans
+**Note:** Dados de daysInStatus por task já existem via changelog. Falta: (1) agregação por fase no buildReport, (2) categorizeStatus refinado para fila/ativo, (3) baseline histórico por fase via done tasks, (4) seção Pipeline Health no markdown, (5) compactar "O que fez ontem".
+
+Plans:
+- [ ] TBD (promote with /gsd:review-backlog when ready)
