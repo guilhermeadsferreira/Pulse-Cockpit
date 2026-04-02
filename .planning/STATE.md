@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 999.7
-last_updated: "2026-04-01T23:58:00Z"
+last_updated: "2026-04-02T00:05:45.403Z"
 progress:
   total_phases: 9
   completed_phases: 4
@@ -61,6 +61,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.7-01]: Blocos gerenciados com comentarios HTML (METRICAS:*) seguindo padrao do ArtifactWriter
 - [Phase 999.7-01]: Daily so persiste alertas quando existem (dias normais nao gravam nada)
 - [Phase 999.7-01]: Graceful degradation via try/catch — falha na persistencia nao impede geracao do relatorio
+- [Phase 999.7-02]: Sprint entregas array vazio — dados individuais nao disponiveis no snapshot
+- [Phase 999.7-02]: Deltas vs mes anterior calculados inline usando previous.commits30d e previous.prsMerged30d
 
 ## Phases
 
@@ -97,6 +99,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | 04 | 03 | 3min | 1/1 | 2 |
 | 04 | 05 | 140s | 1/1 | 2 |
 | 999.7 | 01 | 2min | 2/2 | 3 |
+| 999.7 | 02 | 2min | 2/2 | 2 |
 
 ## Next Action
 
