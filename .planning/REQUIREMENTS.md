@@ -101,9 +101,9 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 - [x] **PLHF-02**: Secao Pipeline Health no daily report com tabela: Fase, Tasks, Tempo medio, Mais antiga, Baseline (sprint), Status
 - [x] **PLHF-03**: Baseline historico por fase computado on-the-fly a partir das done tasks do sprint via changelog
 - [x] **PLHF-04**: Status emoji (ok/warning/critical) conforme thresholds: Dev 5d, CR 3d, QA 3d, Ready to Deploy 2d
-- [ ] **PLHF-05**: Commits compactados por repo na secao "O que fez ontem" (contagem em vez de listing individual)
-- [ ] **PLHF-06**: PRs merged e reviews mantidos como itens individuais; review comments substantivos (> 20 chars) preservados
-- [ ] **PLHF-07**: Haiku analysis recebe dados de Pipeline Health como input e gera insights sobre gargalos do pipeline
+- [x] **PLHF-05**: Commits compactados por repo na secao "O que fez ontem" (contagem em vez de listing individual)
+- [x] **PLHF-06**: PRs merged e reviews mantidos como itens individuais; review comments substantivos (> 20 chars) preservados
+- [x] **PLHF-07**: Haiku analysis recebe dados de Pipeline Health como input e gera insights sobre gargalos do pipeline
 
 ## v2 Requirements
 

@@ -3,12 +3,12 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Executing Phase 999.9
-last_updated: "2026-04-02T14:07:50.708Z"
+last_updated: "2026-04-02T14:12:05.540Z"
 progress:
   total_phases: 10
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 25
-  completed_plans: 24
+  completed_plans: 25
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -77,6 +77,8 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.5]: fetchAndCacheSustentacao reutilizada no handler run-analysis — evita chamada duplicada ao Jira
 - [Phase 999.5]: SIGNIFICANT_TICKET_THRESHOLD=3 para filtrar assignees com tickets relevantes na análise de sustentação
 - [Phase 999.9]: 6 fases finas no pipeline (queue_dev, dev, queue_review, review, qa, queue_deploy) com baseline on-the-fly via done tasks
+- [Phase 999.9]: Commits agrupados por repo com contagem (D-12) — reduz ruido para o gestor
+- [Phase 999.9]: maisAntiga incluida no pipelineHealthText para contexto IA sobre tasks travadas
 
 ## Phases
 
@@ -121,6 +123,7 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 999.5 P05 | 104 | 2 tasks | 3 files |
 | Phase 999.5 P06 | 15min | 2 tasks | 3 files |
 | Phase 999.9 P01 | 3min | 1 tasks | 1 files |
+| Phase 999.9 P02 | 2min | 2 tasks | 2 files |
 
 ## Next Action
 

@@ -160,8 +160,8 @@ Plans:
 **Goal:** O daily report mostra saúde do pipeline por fase (Dev, CR, QA, Ready to Deploy) com tempo médio atual vs baseline histórico, distingue fila vs trabalho ativo (To Do CR vs CR), identifica gargalos automaticamente, e reduz ruído das seções de baixo valor.
 **Depends on**: Nothing (independent backlog)
 **Requirements:** PLHF-01, PLHF-02, PLHF-03, PLHF-04, PLHF-05, PLHF-06, PLHF-07
-**Plans:** 1/2 plans executed
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 999.9-01-PLAN.md — categorizeStatus refinado + Pipeline Health section com baseline (PLHF-01, PLHF-02, PLHF-03, PLHF-04)
-- [ ] 999.9-02-PLAN.md — Compactar commits + enriquecer Haiku com pipeline data (PLHF-05, PLHF-06, PLHF-07)
+- [x] 999.9-02-PLAN.md — Compactar commits + enriquecer Haiku com pipeline data (PLHF-05, PLHF-06, PLHF-07)
