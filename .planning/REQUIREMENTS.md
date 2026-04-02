@@ -80,12 +80,12 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 
 ### Metrics Writer — Perfil Vivo (Phase 999.7)
 
-- [ ] **MTRW-01**: MetricsWriter classe com secoes gerenciadas (Momento Atual, Alertas, Semanas, Sprints, Meses) e retencao automatica
-- [ ] **MTRW-02**: Daily report persiste alertas ativos (blockers, WIP alto, cycle time warning) no metricas.md — dias normais nao gravam nada
-- [ ] **MTRW-03**: Weekly report persiste metricas da semana (velocity, PRs, reviews, collaboration, cycle time) com delta vs semana anterior
-- [ ] **MTRW-04**: Weekly report atualiza secao Momento Atual com tendencias resumidas (setas unicode)
-- [ ] **MTRW-05**: Sprint report persiste resultado consolidado (SP entregues/planejados, cycle time, entregas, bloqueios)
-- [ ] **MTRW-06**: Monthly report persiste tendencia mensal (destaques, pontos de atencao, deltas vs mes anterior)
+- [x] **MTRW-01**: MetricsWriter classe com secoes gerenciadas (Momento Atual, Alertas, Semanas, Sprints, Meses) e retencao automatica
+- [x] **MTRW-02**: Daily report persiste alertas ativos (blockers, WIP alto, cycle time warning) no metricas.md — dias normais nao gravam nada
+- [x] **MTRW-03**: Weekly report persiste metricas da semana (velocity, PRs, reviews, collaboration, cycle time) com delta vs semana anterior
+- [x] **MTRW-04**: Weekly report atualiza secao Momento Atual com tendencias resumidas (setas unicode)
+- [x] **MTRW-05**: Sprint report persiste resultado consolidado (SP entregues/planejados, cycle time, entregas, bloqueios)
+- [x] **MTRW-06**: Monthly report persiste tendencia mensal (destaques, pontos de atencao, deltas vs mes anterior)
 
 ## v2 Requirements
 
