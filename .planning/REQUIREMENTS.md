@@ -87,6 +87,14 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 - [x] **MTRW-05**: Sprint report persiste resultado consolidado (SP entregues/planejados, cycle time, entregas, bloqueios)
 - [x] **MTRW-06**: Monthly report persiste tendencia mensal (destaques, pontos de atencao, deltas vs mes anterior)
 
+### Visibilidade do Board de Sustentacao (Phase 999.5)
+
+- [ ] **SUST-01**: SupportBoardClient busca todos os tickets do projectKey configurado, calcula SLA breach por tipo (default 5 dias) e retorna SupportBoardSnapshot com topTipos, topLabels, ticketsEmBreach e porAssignee
+- [ ] **SUST-02**: AppSettings recebe jiraSupportBoardId, jiraSupportProjectKey e jiraSlaThresholds; UI de configuracao na SettingsView
+- [ ] **SUST-03**: IPC handler sustentacao:get-data com cache de 1h em disco; sustentacao:refresh invalida cache; window.api.sustentacao exposto no preload
+- [ ] **SUST-04**: SustentacaoView como tela top-level na sidebar — exibe metricas do board, tickets em breach e estado de nao-configurado
+- [ ] **SUST-05**: Analise de IA manual (botao "Analisar") extrai padroes, oportunidades de automacao e causa raiz; persiste no metricas.md via bloco SUSTENTACAO:ANALISE para assignees com >= 3 tickets
+
 ## v2 Requirements
 
 Nao ha v2 neste milestone — todas as tasks identificadas estao no escopo v1.
@@ -148,13 +156,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 | MTRW-04 | Phase 999.7 | Planned |
 | MTRW-05 | Phase 999.7 | Planned |
 | MTRW-06 | Phase 999.7 | Planned |
+| SUST-01 | Phase 999.5 | Planned |
+| SUST-02 | Phase 999.5 | Planned |
+| SUST-03 | Phase 999.5 | Planned |
+| SUST-04 | Phase 999.5 | Planned |
+| SUST-05 | Phase 999.5 | Planned |
 
 **Coverage:**
 - v1 requirements: 35 total
 - Mapped to phases: 35
 - Unmapped: 0
 - Backlog requirements (999.7): 6 total
+- Backlog requirements (999.5): 5 total
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-04-01 — added MTRW-01 to MTRW-06 for Phase 999.7*
+*Last updated: 2026-04-02 — added SUST-01 to SUST-05 for Phase 999.5*

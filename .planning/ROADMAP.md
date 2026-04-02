@@ -110,14 +110,19 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 Plans:
 - [ ] TBD (promote with /gsd:review-backlog when ready)
 
-### Phase 999.5: Visibilidade do board de sustentação por pessoa (BACKLOG)
+### Phase 999.5: Visibilidade do board de sustentação por pessoa
 
-**Goal:** Integrar dados do board de sustentação (chamados de clientes/atendimento) ao perfil da pessoa — considerando que é um board separado onde praticamente só uma pessoa atua. O gestor precisa ver a carga de sustentação, tempo de resposta e impacto no capacity da pessoa (ex: Edu) para calibrar expectativas de entrega no board principal.
-**Requirements:** TBD
-**Plans:** 0 plans
+**Goal:** Módulo standalone de Sustentação no app — tela própria na sidebar, visão do board Jira de suporte com métricas de volume, SLA breach e análise de IA. Insumos fluem para o metricas.md das pessoas por assignee.
+**Requirements:** SUST-01, SUST-02, SUST-03, SUST-04, SUST-05
+**Plans:** 6 plans
 
 Plans:
-- [ ] TBD (promote with /gsd:review-backlog when ready)
+- [ ] 999.5-01-PLAN.md — Contratos de tipos: SupportBoardSnapshot, AppSettings campos, ViewName (SUST-01, SUST-02)
+- [ ] 999.5-02-PLAN.md — SupportBoardClient: fetch board Jira, SLA breach, comentários (SUST-01)
+- [ ] 999.5-03-PLAN.md — SettingsView: campos de configuração do board de sustentação (SUST-02)
+- [ ] 999.5-04-PLAN.md — IPC handlers sustentacao:get-data e sustentacao:refresh + preload (SUST-01, SUST-03)
+- [ ] 999.5-05-PLAN.md — SustentacaoView + Sidebar + App.tsx wiring (SUST-04)
+- [ ] 999.5-06-PLAN.md — Prompt de IA + MetricsWriter.writeSustentacaoAnalysis + IPC run-analysis (SUST-03, SUST-05)
 
 ### Phase 999.6: Dashboard de métricas do time — Git + Jira (BACKLOG)
 
