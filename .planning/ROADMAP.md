@@ -179,12 +179,14 @@ Plans:
 ### Phase 999.11: Sustentação — Trending histórico + SLA compliance rate (BACKLOG)
 
 **Goal:** Acumular snapshots históricos de sustentação (não sobrescrever cache), calcular taxa de SLA compliance (% tickets resolvidos no prazo), gráficos de evolução de breach count e tickets fechados ao longo do tempo. Pré-requisito para todas as outras fases de sustentação.
-**Requirements:** TBD
-**Plans:** 0 plans
+**Requirements:** STRD-01, STRD-02, STRD-03, STRD-04, STRD-05
+**Plans:** 3 plans
 **Note:** Gaps cobertos: zero tendência histórica + sem compliance rate. Fase A do pacote Sustentação Intelligence.
 
 Plans:
-- [ ] TBD (promote with /gsd:review-backlog when ready)
+- [ ] 999.11-01-PLAN.md — Tipos + calcularCompliance() (STRD-01, STRD-02)
+- [ ] 999.11-02-PLAN.md — history.json + IPC com history[] (STRD-03)
+- [ ] 999.11-03-PLAN.md — SustentacaoView: compliance cards + deltas + mini charts (STRD-04, STRD-05)
 
 ### Phase 999.12: Sustentação — Reports + cruzamento com produtividade (BACKLOG)
 

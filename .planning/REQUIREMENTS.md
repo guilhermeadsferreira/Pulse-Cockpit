@@ -105,6 +105,14 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 - [x] **PLHF-06**: PRs merged e reviews mantidos como itens individuais; review comments substantivos (> 20 chars) preservados
 - [x] **PLHF-07**: Haiku analysis recebe dados de Pipeline Health como input e gera insights sobre gargalos do pipeline
 
+### Sustentacao Trending & SLA Compliance (Phase 999.11)
+
+- [ ] **STRD-01**: SustentacaoHistoryEntry definido como tipo exportado em ipc.ts; SupportBoardSnapshot estendido com complianceRate7d, complianceRate30d e history: SustentacaoHistoryEntry[]
+- [ ] **STRD-02**: fetchSupportBoardMetrics() calcula complianceRate7d e complianceRate30d usando JiraIssue[] completo em memoria (nao no renderer); retorna null quando sem tickets resolvidos na janela
+- [ ] **STRD-03**: fetchAndCacheSustentacao() grava history.json a cada fetch real com deduplicacao diaria (YYYY-MM-DD) e retencao de 90 dias; retorna snapshot com history[] (ultimos 30) tanto em cache hit quanto em fetch real
+- [ ] **STRD-04**: SustentacaoView exibe dois novos cards de SLA Compliance (7d e 30d) com percentual ou "—" quando null
+- [ ] **STRD-05**: Cards existentes (Abertos, Fechados 30d, Breach) exibem delta indicator (seta + numero absoluto) vs snapshot de 7 dias atras; mini charts SVG de breach count e compliance % exibidos quando history.length >= 2
+
 ## v2 Requirements
 
 Nao ha v2 neste milestone — todas as tasks identificadas estao no escopo v1.
@@ -180,6 +188,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLHF-06 | Phase 999.9 | Planned |
 | PLHF-07 | Phase 999.9 | Planned |
 
+| STRD-01 | Phase 999.11 | Planned |
+| STRD-02 | Phase 999.11 | Planned |
+| STRD-03 | Phase 999.11 | Planned |
+| STRD-04 | Phase 999.11 | Planned |
+| STRD-05 | Phase 999.11 | Planned |
+
 **Coverage:**
 - v1 requirements: 35 total
 - Mapped to phases: 35
@@ -187,7 +201,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Backlog requirements (999.7): 6 total
 - Backlog requirements (999.5): 5 total
 - Backlog requirements (999.9): 7 total
+- Backlog requirements (999.11): 5 total
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-04-02 — added PLHF-01 to PLHF-07 for Phase 999.9*
+*Last updated: 2026-04-02 — added STRD-01 to STRD-05 for Phase 999.11*
