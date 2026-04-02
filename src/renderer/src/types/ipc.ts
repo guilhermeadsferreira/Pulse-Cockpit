@@ -173,7 +173,7 @@ export interface SupportBoardSnapshot {
   ticketsAbertos: number
   /** Tickets fechados nos últimos 30 dias */
   ticketsFechadosUltimos30d: number
-  /** Top 5 tipos por frequência */
+  /** Top 5 tipos por frequência (abertos + fechados nos últimos 30d) */
   topTipos: Array<{ tipo: string; count: number }>
   /** Top 5 labels por frequência */
   topLabels: Array<{ label: string; count: number }>
@@ -181,6 +181,64 @@ export interface SupportBoardSnapshot {
   ticketsEmBreach: SupportTicket[]
   /** Agrupamento por assignee: slug → contagem de tickets abertos */
   porAssignee: Record<string, number>
+  /** null = sem tickets resolvidos nos últimos 7 dias */
+  complianceRate7d: number | null
+  /** null = sem tickets resolvidos nos últimos 30 dias */
+  complianceRate30d: number | null
+  /** Últimos 30 snapshots diários para deltas e mini charts */
+  history: SustentacaoHistoryEntry[]
+  /** Vazão semanal: tickets abertos vs resolvidos por semana (últimas 8 semanas) */
+  inOutSemanal: InOutSemanalEntry[]
+  /** Tipos recorrentes: tipo+label com >2 ocorrências nos últimos 30 dias */
+  recorrentesDetectados: RecorrenteDetectado[]
+  /** Alertas proativos calculados a cada refresh. Array vazio = sem alertas. */
+  alertas: SustentacaoAlerta[]
+}
+
+/** Entrada de histórico diário de sustentação (sem ticketsEmBreach completo para manter history.json leve) */
+export interface SustentacaoHistoryEntry {
+  /** Data no formato YYYY-MM-DD (chave de deduplica diária) */
+  date: string
+  /** Timestamp Unix ms do fetch */
+  fetchedAt: number
+  ticketsAbertos: number
+  ticketsFechadosUltimos30d: number
+  /** Apenas o número, não o array completo de SupportTicket */
+  breachCount: number
+  /** null = sem tickets resolvidos na janela (não exibir percentual, exibir "—") */
+  complianceRate7d: number | null
+  /** null = sem tickets resolvidos na janela */
+  complianceRate30d: number | null
+}
+
+/** Alerta proativo calculado a cada refresh de dados de sustentacao */
+export interface SustentacaoAlerta {
+  /** Identificador da condicao que gerou o alerta */
+  tipo: 'breach_crescente' | 'ticket_envelhecendo' | 'fila_crescendo' | 'spike_incidente'
+  /** Mensagem legivel para exibir no banner */
+  mensagem: string
+  /** Severidade visual */
+  severidade: 'critico' | 'atencao'
+}
+
+/** Entrada de vazão semanal: tickets abertos (in) vs resolvidos (out) na semana. */
+export interface InOutSemanalEntry {
+  /** Início da semana no formato YYYY-MM-DD (segunda-feira) */
+  semana: string
+  /** Tickets criados na semana */
+  in: number
+  /** Tickets resolvidos na semana */
+  out: number
+}
+
+/** Tipo de ticket recorrente detectado nos últimos 30 dias (>2 ocorrências). */
+export interface RecorrenteDetectado {
+  /** Tipo do ticket (ex: "Bug", "Task") */
+  tipo: string
+  /** Label associado (ex: "auth", "performance") — null se sem label relevante */
+  label: string | null
+  /** Número de ocorrências nos últimos 30 dias */
+  ocorrencias: number
 }
 
 export interface ExternalHistoricoEntry {

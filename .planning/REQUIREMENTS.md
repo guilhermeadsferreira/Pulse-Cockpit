@@ -97,13 +97,44 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 
 ### Pipeline Health & Flow Metrics (Phase 999.9)
 
-- [ ] **PLHF-01**: categorizeStatus retorna 6 categorias finas (queue_dev, dev, queue_review, review, qa, queue_deploy) distinguindo fila de trabalho ativo
-- [ ] **PLHF-02**: Secao Pipeline Health no daily report com tabela: Fase, Tasks, Tempo medio, Mais antiga, Baseline (sprint), Status
-- [ ] **PLHF-03**: Baseline historico por fase computado on-the-fly a partir das done tasks do sprint via changelog
-- [ ] **PLHF-04**: Status emoji (ok/warning/critical) conforme thresholds: Dev 5d, CR 3d, QA 3d, Ready to Deploy 2d
-- [ ] **PLHF-05**: Commits compactados por repo na secao "O que fez ontem" (contagem em vez de listing individual)
-- [ ] **PLHF-06**: PRs merged e reviews mantidos como itens individuais; review comments substantivos (> 20 chars) preservados
-- [ ] **PLHF-07**: Haiku analysis recebe dados de Pipeline Health como input e gera insights sobre gargalos do pipeline
+- [x] **PLHF-01**: categorizeStatus retorna 6 categorias finas (queue_dev, dev, queue_review, review, qa, queue_deploy) distinguindo fila de trabalho ativo
+- [x] **PLHF-02**: Secao Pipeline Health no daily report com tabela: Fase, Tasks, Tempo medio, Mais antiga, Baseline (sprint), Status
+- [x] **PLHF-03**: Baseline historico por fase computado on-the-fly a partir das done tasks do sprint via changelog
+- [x] **PLHF-04**: Status emoji (ok/warning/critical) conforme thresholds: Dev 5d, CR 3d, QA 3d, Ready to Deploy 2d
+- [x] **PLHF-05**: Commits compactados por repo na secao "O que fez ontem" (contagem em vez de listing individual)
+- [x] **PLHF-06**: PRs merged e reviews mantidos como itens individuais; review comments substantivos (> 20 chars) preservados
+- [x] **PLHF-07**: Haiku analysis recebe dados de Pipeline Health como input e gera insights sobre gargalos do pipeline
+
+### Sustentacao Trending & SLA Compliance (Phase 999.11)
+
+- [x] **STRD-01**: SustentacaoHistoryEntry definido como tipo exportado em ipc.ts; SupportBoardSnapshot estendido com complianceRate7d, complianceRate30d e history: SustentacaoHistoryEntry[]
+- [x] **STRD-02**: fetchSupportBoardMetrics() calcula complianceRate7d e complianceRate30d usando JiraIssue[] completo em memoria (nao no renderer); retorna null quando sem tickets resolvidos na janela
+- [x] **STRD-03**: fetchAndCacheSustentacao() grava history.json a cada fetch real com deduplicacao diaria (YYYY-MM-DD) e retencao de 90 dias; retorna snapshot com history[] (ultimos 30) tanto em cache hit quanto em fetch real
+- [x] **STRD-04**: SustentacaoView exibe dois novos cards de SLA Compliance (7d e 30d) com percentual ou "—" quando null
+- [x] **STRD-05**: Cards existentes (Abertos, Fechados 30d, Breach) exibem delta indicator (seta + numero absoluto) vs snapshot de 7 dias atras; mini charts SVG de breach count e compliance % exibidos quando history.length >= 2
+
+### Sustentacao Reports & Cruzamento com Produtividade (Phase 999.12)
+
+- [x] **SRCP-01**: fetchSustentacaoForReport() exportada no SupportBoardClient — busca snapshot sem IPC, retorna null quando nao configurado, graceful degradation via try/catch
+- [x] **SRCP-02**: Daily report inclui secao "Sustentacao" com carga total, breach count, SLA compliance e tabela de carga por pessoa (porAssignee cruzado com nomes do time)
+- [x] **SRCP-03**: Prompt daily-analysis recebe campo sustentacao? e instrucao de cruzamento produtividade×suporte — "fulano carrega X tickets E velocity baixa"
+- [x] **SRCP-04**: MetricsWriter.writeSustentacaoWeekly() persiste SustentacaoWeeklyEntry (semana, ticketsAbertos, breachCount, complianceRate7d) em secao SUSTENTACAO_SEMANAL com retencao de 12 entradas
+- [x] **SRCP-05**: Weekly report inclui secao "Sustentacao da Semana" com cruzamento inline (pessoa com >= 3 tickets E zero SP → nota de impacto); chama writeSustentacaoWeekly() para cada pessoa com tickets no porAssignee
+
+### Sustentacao Intel Operacional (Phase 999.13)
+
+- [x] **INTEL-01**: SupportBoardSnapshot estendido com `inOutSemanal: InOutSemanalEntry[]` (vazao semanal in/out, ultimas 8 semanas) calculado no SupportBoardClient a partir dos issues dos ultimos 90d
+- [x] **INTEL-02**: SupportBoardSnapshot estendido com `recorrentesDetectados: RecorrenteDetectado[]` (tipo+label com >2 ocorrencias nos ultimos 30d) — logica deterministica, sem IA; topTipos inclui tickets fechados 30d alem dos abertos
+- [x] **INTEL-03**: SustentacaoView exibe secao "Inteligencia Operacional" com grafico in/out semanal (SVG barras inline) e curva historica de backlog (MiniLineChart com ticketsAbertos do history[])
+- [x] **INTEL-04**: Secao "Inteligencia Operacional" exibe top tipos expandidos (abertos+fechados 30d) e lista de recorrentes com alerta visual "Candidato a raiz — Nx em 30d"; secao nao renderiza quando sem dados
+
+### Sustentacao Alertas Proativos (Phase 999.14)
+
+- [x] **ALRT-01**: `SustentacaoAlerta` tipo exportado em ipc.ts com campos `tipo` (4 valores), `mensagem` e `severidade` ('critico' | 'atencao'); `SupportBoardSnapshot` estendido com `alertas: SustentacaoAlerta[]`
+- [x] **ALRT-02**: `calcularAlertas()` exportada no SupportBoardClient — recebe snapshot + history[] + issues[] + slaThresholds; retorna `SustentacaoAlerta[]` calculando as 4 condicoes (breach crescente, ticket envelhecendo, fila crescendo, spike de incidente) com defaults fixos
+- [x] **ALRT-03**: IPC handler `fetchAndCacheSustentacao` chama `calcularAlertas()` apos montar snapshot e inclui resultado em `snapshot.alertas` antes de retornar ao renderer
+- [x] **ALRT-04**: Sidebar exibe badge dot vermelho no item Sustentacao quando `snapshot.alertas.length > 0`; badge some automaticamente quando alertas zerados; estado carregado via IPC sustentacao:get-data no mount
+- [x] **ALRT-05**: SustentacaoView exibe banner inline logo abaixo do header quando `snapshot.alertas.length > 0`; banner lista cada alerta com icone e mensagem; some automaticamente apos refresh sem alertas
 
 ## v2 Requirements
 
@@ -180,6 +211,29 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PLHF-06 | Phase 999.9 | Planned |
 | PLHF-07 | Phase 999.9 | Planned |
 
+| STRD-01 | Phase 999.11 | Planned |
+| STRD-02 | Phase 999.11 | Planned |
+| STRD-03 | Phase 999.11 | Planned |
+| STRD-04 | Phase 999.11 | Planned |
+| STRD-05 | Phase 999.11 | Planned |
+
+| SRCP-01 | Phase 999.12 | Planned |
+| SRCP-02 | Phase 999.12 | Planned |
+| SRCP-03 | Phase 999.12 | Planned |
+| SRCP-04 | Phase 999.12 | Planned |
+| SRCP-05 | Phase 999.12 | Planned |
+
+| INTEL-01 | Phase 999.13 | Complete |
+| INTEL-02 | Phase 999.13 | Complete |
+| INTEL-03 | Phase 999.13 | Complete |
+| INTEL-04 | Phase 999.13 | Complete |
+
+| ALRT-01 | Phase 999.14 | Planned |
+| ALRT-02 | Phase 999.14 | Planned |
+| ALRT-03 | Phase 999.14 | Planned |
+| ALRT-04 | Phase 999.14 | Planned |
+| ALRT-05 | Phase 999.14 | Planned |
+
 **Coverage:**
 - v1 requirements: 35 total
 - Mapped to phases: 35
@@ -187,7 +241,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 - Backlog requirements (999.7): 6 total
 - Backlog requirements (999.5): 5 total
 - Backlog requirements (999.9): 7 total
+- Backlog requirements (999.11): 5 total
+- Backlog requirements (999.12): 5 total
+- Backlog requirements (999.13): 4 total
+- Backlog requirements (999.14): 5 total
 
 ---
 *Requirements defined: 2026-03-31*
-*Last updated: 2026-04-02 — added PLHF-01 to PLHF-07 for Phase 999.9*
+*Last updated: 2026-04-02 — added ALRT-01 to ALRT-05 for Phase 999.14*

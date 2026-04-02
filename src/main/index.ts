@@ -26,8 +26,8 @@ import { WeeklyReportGenerator } from './external/WeeklyReportGenerator'
 import { MonthlyReportGenerator } from './external/MonthlyReportGenerator'
 import { GitHubClient } from './external/GitHubClient'
 import { SystemAuditor } from './audit/SystemAuditor'
-import { fetchSupportBoardMetrics } from './external/SupportBoardClient'
-import type { SupportBoardSnapshot } from '../renderer/src/types/ipc'
+import { fetchSupportBoardMetricsWithIssues, calcularAlertas } from './external/SupportBoardClient'
+import type { SupportBoardSnapshot, SustentacaoHistoryEntry } from '../renderer/src/types/ipc'
 import { buildSustentacaoPrompt } from './prompts/sustentacao-analysis.prompt'
 import { MetricsWriter } from './external/MetricsWriter'
 import yaml from 'js-yaml'
@@ -1112,6 +1112,16 @@ function registerIpcHandlers(): void {
   })
 
   // ── Sustentacao Board ─────────────────────────────────────────
+  function readHistory(historyFile: string): SustentacaoHistoryEntry[] {
+    try {
+      if (!existsSync(historyFile)) return []
+      return JSON.parse(readFileSync(historyFile, 'utf-8')) as SustentacaoHistoryEntry[]
+    } catch {
+      // history.json corrompido ou inválido — retornar vazio sem propagar erro
+      return []
+    }
+  }
+
   async function fetchAndCacheSustentacao(): Promise<SupportBoardSnapshot | null> {
     const settings = SettingsManager.load()
     const { jiraSupportProjectKey, jiraBaseUrl, jiraEmail, jiraApiToken, jiraSlaThresholds } = settings
@@ -1129,14 +1139,19 @@ function registerIpcHandlers(): void {
         const cached = JSON.parse(readFileSync(cacheFile, 'utf-8')) as { data: SupportBoardSnapshot; fetchedAt: number }
         if (Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
           Logger.getInstance().child('IPC').info('sustentacao:get-data cache hit')
-          return cached.data
+          const historyFile = join(cacheDir, 'history.json')
+          const historyData = readHistory(historyFile).slice(-30)
+          // Cache hit — alertas calculados on-the-fly sobre dados cached (sem issues[] raw)
+          // Graceful: sem issues raw disponivel no cache, alertas D-07 ficam silenciosos
+          const alertasCached = calcularAlertas(cached.data, historyData, [], jiraSlaThresholds ?? {})
+          return { ...cached.data, history: historyData, alertas: alertasCached }
         }
       }
     } catch { /* cache inválido — refetch */ }
 
     Logger.getInstance().child('IPC').info('sustentacao:get-data buscando board', { projectKey: jiraSupportProjectKey })
 
-    const data = await fetchSupportBoardMetrics({
+    const { snapshot: data, issues } = await fetchSupportBoardMetricsWithIssues({
       config: { baseUrl: jiraBaseUrl, email: jiraEmail, apiToken: jiraApiToken },
       projectKey: jiraSupportProjectKey,
       slaThresholds: jiraSlaThresholds,
@@ -1149,7 +1164,46 @@ function registerIpcHandlers(): void {
       Logger.getInstance().child('IPC').warn('sustentacao:get-data falha ao gravar cache', { error: err instanceof Error ? err.message : String(err) })
     }
 
-    return data
+    // Gravar snapshot no histórico diário (history.json)
+    try {
+      const historyFile = join(cacheDir, 'history.json')
+      const dateKey = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
+      const history = readHistory(historyFile)
+
+      // Deduplica: remover entrada do mesmo dia (mantém apenas a mais recente)
+      const filtered = history.filter((e) => e.date !== dateKey)
+
+      // Append entrada de hoje (usar apenas campos agregados — sem ticketsEmBreach completo)
+      filtered.push({
+        date: dateKey,
+        fetchedAt: Date.now(),
+        ticketsAbertos: data.ticketsAbertos,
+        ticketsFechadosUltimos30d: data.ticketsFechadosUltimos30d,
+        breachCount: data.ticketsEmBreach.length,
+        complianceRate7d: data.complianceRate7d,
+        complianceRate30d: data.complianceRate30d,
+      })
+
+      // Retenção: 90 dias
+      const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000
+      const retained = filtered.filter((e) => e.fetchedAt >= cutoff)
+
+      writeFileSync(historyFile, JSON.stringify(retained), 'utf-8')
+    } catch (histErr) {
+      Logger.getInstance().child('IPC').warn('sustentacao: falha ao gravar history (graceful)', {
+        error: histErr instanceof Error ? histErr.message : String(histErr),
+      })
+    }
+
+    // Calcular alertas proativos (per D-10, D-11)
+    const historyForAlerts = readHistory(join(cacheDir, 'history.json'))
+    const alertas = calcularAlertas(data, historyForAlerts, issues, jiraSlaThresholds ?? {})
+    const dataComAlertas = { ...data, alertas }
+
+    const historyFile = join(cacheDir, 'history.json')
+    const historyData = readHistory(historyFile).slice(-30)
+    return { ...dataComAlertas, history: historyData }
   }
 
   ipcMain.handle('sustentacao:get-data', async (): Promise<SupportBoardSnapshot | null> => {

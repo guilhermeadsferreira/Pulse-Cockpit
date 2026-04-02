@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to plan
-last_updated: "2026-04-02T11:47:42.084Z"
+status: Executing Phase 999.14
+last_updated: "2026-04-02T18:50:46.320Z"
 progress:
-  total_phases: 9
-  completed_phases: 6
-  total_plans: 23
-  completed_plans: 23
+  total_phases: 16
+  completed_phases: 11
+  total_plans: 34
+  completed_plans: 34
 ---
 
 # Project State — Pulse Cockpit V2.1
@@ -18,7 +18,7 @@ progress:
 See: `.planning/PROJECT.md` (updated 2026-03-26)
 
 **Core value:** O contexto acumulado ao longo do ciclo deve estar acessível para o gestor na hora que importa: na tela do perfil, na pauta e no relatório de calibração.
-**Current focus:** Phase 999.5 — visibilidade-board-sustentacao
+**Current focus:** Phase 999.14 — sustentacao-alertas-proativos
 
 ## Current Status
 
@@ -76,6 +76,31 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 - [Phase 999.5-05]: SustentacaoView com 3 estados: loading, não-configurado (onboarding) e dados carregados
 - [Phase 999.5]: fetchAndCacheSustentacao reutilizada no handler run-analysis — evita chamada duplicada ao Jira
 - [Phase 999.5]: SIGNIFICANT_TICKET_THRESHOLD=3 para filtrar assignees com tickets relevantes na análise de sustentação
+- [Phase 999.9]: 6 fases finas no pipeline (queue_dev, dev, queue_review, review, qa, queue_deploy) com baseline on-the-fly via done tasks
+- [Phase 999.9]: Commits agrupados por repo com contagem (D-12) — reduz ruido para o gestor
+- [Phase 999.9]: maisAntiga incluida no pipelineHealthText para contexto IA sobre tasks travadas
+- [Phase 999.11]: calcularCompliance retorna null (não 0%) quando não há tickets resolvidos na janela — sem dados semanticamente diferente de 0% compliance
+- [Phase 999.11]: history: [] no return do SupportBoardClient — preenchido pelo IPC handler no Plan 02 (client não tem acesso ao workspacePath)
+- [Phase 999.11]: readHistory chamada APOS gravar history.json — snapshot de hoje ja incluso nos dados retornados via .slice(-30)
+- [Phase 999.11]: Try/catch do history separado do board.json — falha no history nunca impede retorno do snapshot
+- [Phase 999.11]: MiniLineChart com SVG polyline inline — sem dependência externa de charting
+- [Phase 999.11]: Compliance cards em row separada acima dos cards existentes para hierarquia visual clara
+- [Phase 999.12]: fetchSustentacaoForReport não lê/grava history.json — responsabilidade do IPC handler que tem acesso ao workspacePath
+- [Phase 999.12]: Sustentação omitida silenciosamente no Daily Report quando snapshot null — sem seção vazia
+- [Phase 999.12]: Cruzamento porAssignee usa slug como chave, fallback para slug bruto quando pessoa não encontrada
+- [Phase 999.12]: writeSustentacaoWeekly usa tabela markdown com retention por contagem de linhas — dados de suporte são tabulares por natureza
+- [Phase 999.12]: Seção Sustentação adicionada após Resumo do Time no Weekly — hierarquia visual: sumário do time primeiro, detalhe de suporte depois
+- [Phase 999.13]: topTipos agora inclui abertos + fechados dos ultimos 30d (nao so abertos) — reflete melhor o volume real de trabalho
+- [Phase 999.13]: labelCounts e assigneeCounts mantidos apenas sobre tickets abertos — representam carga atual, nao historico
+- [Phase 999.13]: IN_OUT_SEMANAS=8 como constante — janela padrao de 8 semanas para visibilidade de tendencia na UI
+- [Phase 999.13]: IntelOperacionalSection inserida entre Evolucao e Analise de IA — fluxo narrativo: snapshot, tendencia, diagnostico IA
+- [Phase 999.13]: Distribuicao por Tipo standalone removida e integrada ao sub-bloco 3 de IntelOperacionalSection — elimina duplicacao e agrupa inteligencia em local unico
+- [Phase 999.14]: fetchSupportBoardMetricsWithIssues como variante interna — preserva assinatura publica de fetchSupportBoardMetrics (retorna alertas: [])
+- [Phase 999.14]: Cache hit usa issues=[] para calcularAlertas — D-07 silencioso em cache, D-04/D-05/D-06 funcionam normalmente
+- [Phase 999.14]: Thresholds fixos no SupportBoardClient (ALRT_BREACH_DELTA=2, ALRT_SLA_MULTIPLIER=2, ALRT_FILA_DAYS=3, ALRT_SPIKE_COUNT=3) — nao configuravel nesta fase
+- [Phase 999.14-02]: Badge numerico (nao apenas dot) — reutiliza padrao badge?: number de NavItem existente para consistencia com item Eu
+- [Phase 999.14-02]: Evento sustentacao:refreshed via CustomEvent — comunicacao leve Sidebar<->SustentacaoView sem contexto React adicional
+- [Phase 999.14-02]: Verificacao condicional snapshot.alertas defensiva — comportamento seguro contra snapshots de cache antigos sem campo alertas
 
 ## Phases
 
@@ -119,6 +144,17 @@ See: `.planning/PROJECT.md` (updated 2026-03-26)
 | Phase 999.5 P04 | 2min | 2 tasks | 2 files |
 | Phase 999.5 P05 | 104 | 2 tasks | 3 files |
 | Phase 999.5 P06 | 15min | 2 tasks | 3 files |
+| Phase 999.9 P01 | 3min | 1 tasks | 1 files |
+| Phase 999.9 P02 | 2min | 2 tasks | 2 files |
+| Phase 999.11 P01 | 85s | 2 tasks | 3 files |
+| Phase 999.11 P02 | 3min | 1 tasks | 1 files |
+| Phase 999.11 P03 | 100s | 1 tasks | 1 files |
+| Phase 999.12 P01 | 2min | 2 tasks | 3 files |
+| Phase 999.12 P02 | 180 | 2 tasks | 2 files |
+| Phase 999.13 P01 | 157 | 2 tasks | 2 files |
+| Phase 999.13 P02 | 294 | 1 tasks | 2 files |
+| Phase 999.14 P01 | 4min | 2 tasks | 3 files |
+| Phase 999.14 P02 | 83 | 2 tasks | 2 files |
 
 ## Next Action
 

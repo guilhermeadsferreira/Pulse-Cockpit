@@ -160,8 +160,63 @@ Plans:
 **Goal:** O daily report mostra saúde do pipeline por fase (Dev, CR, QA, Ready to Deploy) com tempo médio atual vs baseline histórico, distingue fila vs trabalho ativo (To Do CR vs CR), identifica gargalos automaticamente, e reduz ruído das seções de baixo valor.
 **Depends on**: Nothing (independent backlog)
 **Requirements:** PLHF-01, PLHF-02, PLHF-03, PLHF-04, PLHF-05, PLHF-06, PLHF-07
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
-- [ ] 999.9-01-PLAN.md — categorizeStatus refinado + Pipeline Health section com baseline (PLHF-01, PLHF-02, PLHF-03, PLHF-04)
-- [ ] 999.9-02-PLAN.md — Compactar commits + enriquecer Haiku com pipeline data (PLHF-05, PLHF-06, PLHF-07)
+- [x] 999.9-01-PLAN.md — categorizeStatus refinado + Pipeline Health section com baseline (PLHF-01, PLHF-02, PLHF-03, PLHF-04)
+- [x] 999.9-02-PLAN.md — Compactar commits + enriquecer Haiku com pipeline data (PLHF-05, PLHF-06, PLHF-07)
+
+### Phase 999.10: Baseline cross-sprint para Pipeline Health (BACKLOG)
+
+**Goal:** Pipeline Health usa baseline histórico cross-sprint (últimos 3 meses) em vez de apenas done tasks do sprint atual. Persistir tempos por fase (Dev, CR, QA) em metricas.md a cada sprint fechado e agregar para baseline mais robusto.
+**Requirements:** TBD
+**Plans:** 0 plans
+**Note:** Phase 999.9 implementou baseline intra-sprint (done tasks do sprint atual). Esta evolução cruza múltiplos sprints via metricas.md. Depende de 999.9 (Pipeline Health) e 999.7 (MetricsWriter).
+
+Plans:
+- [ ] TBD (promote with /gsd:review-backlog when ready)
+
+### Phase 999.11: Sustentação — Trending histórico + SLA compliance rate (BACKLOG)
+
+**Goal:** Acumular snapshots históricos de sustentação (não sobrescrever cache), calcular taxa de SLA compliance (% tickets resolvidos no prazo), gráficos de evolução de breach count e tickets fechados ao longo do tempo. Pré-requisito para todas as outras fases de sustentação.
+**Requirements:** STRD-01, STRD-02, STRD-03, STRD-04, STRD-05
+**Plans:** 3/3 plans complete
+**Note:** Gaps cobertos: zero tendência histórica + sem compliance rate. Fase A do pacote Sustentação Intelligence.
+
+Plans:
+- [x] 999.11-01-PLAN.md — Tipos + calcularCompliance() (STRD-01, STRD-02)
+- [x] 999.11-02-PLAN.md — history.json + IPC com history[] (STRD-03)
+- [x] 999.11-03-PLAN.md — SustentacaoView: compliance cards + deltas + mini charts (STRD-04, STRD-05)
+
+### Phase 999.12: Sustentação — Reports + cruzamento com produtividade
+
+**Goal:** Sustentação entra nos reports (Daily/Weekly) com resumo de carga, breaches e alertas. Cruzar dados de sustentação com produtividade do time: "fulano teve velocity baixa E estava carregando 8 tickets de suporte". Análise de IA automatizada nos reports em vez de manual.
+**Requirements:** SRCP-01, SRCP-02, SRCP-03, SRCP-04, SRCP-05
+**Plans:** 2/2 plans complete
+**Note:** Gaps cobertos: sustentação é silo + IA manual e descartável (parcial). Fase B — depende de 999.11 (trending). Depende também de 999.7 (MetricsWriter) para persistência.
+
+Plans:
+- [x] 999.12-01-PLAN.md — fetchSustentacaoForReport() + seção Sustentação no Daily + cruzamento no prompt IA (SRCP-01, SRCP-02, SRCP-03)
+- [x] 999.12-02-PLAN.md — MetricsWriter.writeSustentacaoWeekly() + seção Sustentação no Weekly (SRCP-04, SRCP-05)
+
+### Phase 999.13: Sustentação — Intel operacional por pessoa
+
+**Goal:** Inteligência operacional da operação de sustentação: vazão semanal (in/out), curva histórica de backlog, top tipos por frequência (abertos + fechados), detecção de recorrência (candidatos a resolver na raiz). Visualização na SustentacaoView existente.
+**Requirements:** INTEL-01, INTEL-02, INTEL-03, INTEL-04
+**Plans:** 2/2 plans complete
+**Note:** Gap coberto: sem inteligência operacional. Fase C — independente de B, depende de A (trending histórico para curva de backlog).
+
+Plans:
+- [x] 999.13-01-PLAN.md — Tipos InOutSemanalEntry + RecorrenteDetectado + cálculos no SupportBoardClient (INTEL-01, INTEL-02)
+- [ ] 999.13-02-PLAN.md — Seção "Inteligência Operacional" na SustentacaoView (INTEL-03, INTEL-04)
+
+### Phase 999.14: Sustentação — Alertas proativos
+
+**Goal:** O app detecta automaticamente condições críticas na operação de sustentação e avisa o gestor antes de virar crise — via badge na sidebar e banner inline na SustentacaoView. Alertas calculados a cada refresh, somem sozinhos quando a condição melhora.
+**Requirements:** ALRT-01, ALRT-02, ALRT-03, ALRT-04, ALRT-05
+**Plans:** 2/2 plans complete
+**Note:** Gap coberto: sem alertas proativos. Fase D — depende de A (trending) para detecção de tendência. 4 condições: breach crescente, ticket envelhecendo, fila crescendo, spike de incidente.
+
+Plans:
+- [x] 999.14-01-PLAN.md — SustentacaoAlerta tipo + calcularAlertas() + IPC integration (ALRT-01, ALRT-02, ALRT-03)
+- [x] 999.14-02-PLAN.md — Badge na Sidebar + banner inline na SustentacaoView (ALRT-04, ALRT-05)
