@@ -8,7 +8,10 @@ import { ExternalDataPass } from './ExternalDataPass'
 import { MetricsWriter, type AlertEntry } from './MetricsWriter'
 import { runClaudePrompt } from '../ingestion/ClaudeRunner'
 import { buildDailyAnalysisPrompt } from '../prompts/daily-analysis.prompt'
+import { fetchSustentacaoForReport } from './SupportBoardClient'
 import { Logger } from '../logging/Logger'
+import { notifyReportProgress } from './reportProgress'
+import type { SupportBoardSnapshot } from '../../renderer/src/types/ipc'
 
 const log = Logger.getInstance().child('DailyReportGenerator')
 
@@ -125,18 +128,25 @@ export class DailyReportGenerator {
     }
 
     log.info('generateDailyReport: iniciando', { date: today })
+    const progress = (step: string, message: string, percent: number) =>
+      notifyReportProgress({ type: 'daily', step, message, percent })
+
+    progress('init', 'Iniciando relatório daily…', 5)
 
     const registry = new PersonRegistry(this.workspacePath)
     const people = registry.list().filter(p => p.relacao === 'liderado')
     const settings = SettingsManager.load()
 
     // 1. Fetch sprint data ONCE (not per-person)
+    progress('sprint-data', 'Buscando dados do sprint…', 15)
     const { sprintOverview, sprintIssuesByPerson, jiraClient, allSprintIssues } = await this.fetchSprintData(people, settings)
 
     // 2. Fetch yesterday activity + cycle time for ALL people in parallel (batches of 3)
+    progress('people-data', `Coletando atividade de ${people.length} pessoas…`, 30)
     const personReports = await this.fetchAllPeopleData(people, settings, sprintIssuesByPerson, jiraClient)
 
     // 2.5 Compute baseline from done tasks changelog (per D-04, D-06)
+    progress('baseline', 'Calculando baseline de cycle time…', 50)
     const doneTasksFromSprint = allSprintIssues.filter(i => i.statusCategory === 'done')
     const doneChangelogs = new Map<string, JiraChangelogEntry[]>()
     if (jiraClient && doneTasksFromSprint.length >= 3) {
@@ -152,13 +162,24 @@ export class DailyReportGenerator {
     }
     const doneTasksPhaseTime = computePhaseTimesFromDoneTasks(doneTasksFromSprint, doneChangelogs)
 
+    // 2.6 Fetch sustentação (graceful — null se não configurado)
+    progress('sustentacao', 'Buscando dados de sustentação…', 55)
+    let sustentacaoSnapshot: SupportBoardSnapshot | null = null
+    try {
+      sustentacaoSnapshot = await fetchSustentacaoForReport(settings)
+    } catch (err) {
+      log.warn('sustentação: falhou (graceful)', { error: err instanceof Error ? err.message : String(err) })
+    }
+
     // 3. Build deterministic report
+    progress('build', 'Montando relatório…', 65)
     const allActiveTasks = personReports.flatMap(r => r.activeTasks)
-    const { content, analysisInput } = this.buildReport(personReports, sprintOverview, today, allActiveTasks, doneTasksPhaseTime)
+    const { content, analysisInput } = this.buildReport(personReports, sprintOverview, today, allActiveTasks, doneTasksPhaseTime, sustentacaoSnapshot)
 
     // 4. Enrich with Haiku analysis (graceful degradation)
     let finalContent = content
     if (settings.claudeBinPath) {
+      progress('ai-analysis', 'Executando análise IA…', 75)
       try {
         const aiSection = await this.runHaikuAnalysis(settings, analysisInput)
         if (aiSection) {
@@ -169,6 +190,7 @@ export class DailyReportGenerator {
       }
     }
 
+    progress('write', 'Salvando relatório…', 95)
     mkdirSync(this.relatoriosDir, { recursive: true })
     writeFileSync(filePath, finalContent, 'utf-8')
     log.info('daily report gerado', { date: today, path: filePath })
@@ -201,6 +223,7 @@ export class DailyReportGenerator {
       }
     }
 
+    progress('done', 'Relatório daily concluído!', 100)
     return filePath
   }
 
@@ -645,7 +668,7 @@ export class DailyReportGenerator {
 
   private async runHaikuAnalysis(
     settings: AppSettings,
-    analysisInput: { sprintOverview: string; perPersonSummary: string; alerts: string; pipelineHealth?: string },
+    analysisInput: { sprintOverview: string; perPersonSummary: string; alerts: string; pipelineHealth?: string; sustentacao?: string },
   ): Promise<string | null> {
     const prompt = buildDailyAnalysisPrompt(analysisInput)
     const model = settings.claudeDefaultModel ?? 'haiku'
@@ -715,7 +738,8 @@ export class DailyReportGenerator {
     today: string,
     allActiveTasks?: TaskCycleInfo[],
     doneTasksPhaseTime?: Map<string, number[]>,
-  ): { content: string; analysisInput: { sprintOverview: string; perPersonSummary: string; alerts: string; pipelineHealth?: string } } {
+    sustentacao?: SupportBoardSnapshot | null,
+  ): { content: string; analysisInput: { sprintOverview: string; perPersonSummary: string; alerts: string; pipelineHealth?: string; sustentacao?: string } } {
     const lines: string[] = []
     const formattedDate = this.formatDateLong(today)
     const collectedAt = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
@@ -1014,6 +1038,60 @@ export class DailyReportGenerator {
       lines.push('')
     }
 
+    // ── Sustentação ──────────────────────────────────────────
+    let sustentacaoText = ''
+    if (sustentacao) {
+      const lines_sust: string[] = []
+      lines_sust.push('## Sustentação', '')
+      lines_sust.push(`> Atualizado em: ${sustentacao.atualizadoEm.slice(0, 10)} | Abertos: ${sustentacao.ticketsAbertos} | Breach: ${sustentacao.ticketsEmBreach.length}`, '')
+
+      if (sustentacao.complianceRate7d !== null) {
+        lines_sust.push(`> SLA compliance 7d: **${sustentacao.complianceRate7d}%**${sustentacao.complianceRate30d !== null ? ` | 30d: **${sustentacao.complianceRate30d}%**` : ''}`, '')
+      }
+
+      // Cruzar porAssignee com pessoas do time
+      const assigneeEntries = Object.entries(sustentacao.porAssignee)
+        .filter(([, count]) => count > 0)
+        .sort((a, b) => b[1] - a[1])
+
+      if (assigneeEntries.length > 0) {
+        lines_sust.push('### Carga por pessoa', '')
+        for (const [slug, count] of assigneeEntries) {
+          const person = personReports.find(p => p.slug === slug)
+          const nome = person?.nome ?? slug
+          const alert = count >= 5 ? ' ⚠️' : count >= 3 ? ' 🔵' : ''
+          lines_sust.push(`- **${nome}**: ${count} ticket(s) aberto(s)${alert}`)
+        }
+        lines_sust.push('')
+      }
+
+      if (sustentacao.ticketsEmBreach.length > 0) {
+        lines_sust.push('### Tickets em Breach de SLA', '')
+        for (const ticket of sustentacao.ticketsEmBreach.slice(0, 5)) {
+          const assignee = ticket.assignee ?? 'sem assignee'
+          lines_sust.push(`- **${ticket.key}** — ${ticket.summary} (${ticket.ageDias}d, ${assignee})`)
+        }
+        if (sustentacao.ticketsEmBreach.length > 5) {
+          lines_sust.push(`- _...e mais ${sustentacao.ticketsEmBreach.length - 5} tickets_`)
+        }
+        lines_sust.push('')
+      }
+
+      lines.push(...lines_sust)
+
+      // Texto resumido para o analysisInput da IA
+      sustentacaoText = [
+        `Board: ${sustentacao.ticketsAbertos} abertos, ${sustentacao.ticketsEmBreach.length} em breach`,
+        sustentacao.complianceRate7d !== null ? `SLA compliance 7d: ${sustentacao.complianceRate7d}%` : '',
+        assigneeEntries.length > 0
+          ? 'Carga por pessoa: ' + assigneeEntries.map(([slug, n]) => {
+              const nome = personReports.find(p => p.slug === slug)?.nome ?? slug
+              return `${nome} (${n} tickets)`
+            }).join(', ')
+          : '',
+      ].filter(Boolean).join('\n')
+    }
+
     // Build analysis input for Haiku
     const sprintSummaryText = sprintOverview
       ? `${sprintOverview.nome}: ${sprintOverview.totalDone}/${sprintOverview.totalIssues} issues, ${sprintOverview.totalSPDone}/${sprintOverview.totalSP} SP\n` +
@@ -1077,6 +1155,7 @@ export class DailyReportGenerator {
       perPersonSummary: perPersonLines.join('\n\n'),
       alerts: alerts.join('\n'),
       pipelineHealth: pipelineHealthText || undefined,
+      sustentacao: sustentacaoText || undefined,
     }
 
     return { content: lines.join('\n'), analysisInput }
