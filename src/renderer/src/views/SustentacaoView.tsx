@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, Loader2, Wrench } from 'lucide-react'
+import { RefreshCw, Loader2, Wrench, AlertTriangle, AlertCircle } from 'lucide-react'
 import { useRouter } from '../router'
-import type { SupportBoardSnapshot, SustentacaoHistoryEntry, InOutSemanalEntry, RecorrenteDetectado } from '../types/ipc'
+import type { SupportBoardSnapshot, SustentacaoHistoryEntry, InOutSemanalEntry, RecorrenteDetectado, SustentacaoAlerta } from '../types/ipc'
 
 /** Retorna delta absoluto vs snapshot de ~7 dias atrás. null se não há referência. */
 function getDelta(
@@ -129,6 +129,53 @@ function InOutBarChart({
         )
       })}
     </svg>
+  )
+}
+
+function AlertasBanner({ alertas }: { alertas: SustentacaoAlerta[] }) {
+  if (alertas.length === 0) return null
+
+  const sorted = [...alertas].sort((a, b) => {
+    // critico primeiro
+    if (a.severidade === 'critico' && b.severidade !== 'critico') return -1
+    if (b.severidade === 'critico' && a.severidade !== 'critico') return 1
+    return 0
+  })
+
+  return (
+    <div style={{
+      margin: '0 40px 16px',
+      background: 'var(--red-dim)',
+      border: '1px solid rgba(184,64,64,0.25)',
+      borderRadius: 8,
+      padding: '12px 16px',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        fontSize: 12.5, fontWeight: 600,
+        color: 'var(--red)',
+        marginBottom: sorted.length > 0 ? 8 : 0,
+        fontFamily: 'var(--font)',
+      }}>
+        <AlertTriangle size={13} />
+        {sorted.length === 1 ? '1 alerta ativo' : `${sorted.length} alertas ativos`}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {sorted.map((alerta, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'flex-start', gap: 6,
+            fontSize: 12.5, color: 'var(--text-secondary)',
+            lineHeight: 1.45,
+          }}>
+            {alerta.severidade === 'critico'
+              ? <AlertCircle size={12} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 1 }} />
+              : <AlertTriangle size={12} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 1 }} />
+            }
+            {alerta.mensagem}
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -279,6 +326,8 @@ export function SustentacaoView() {
     try {
       const data = await window.api.sustentacao.refresh()
       setSnapshot(data)
+      // Notificar sidebar para atualizar badge
+      window.dispatchEvent(new CustomEvent('sustentacao:refreshed'))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao atualizar')
     } finally {
@@ -438,6 +487,11 @@ export function SustentacaoView() {
             ×
           </button>
         </div>
+      )}
+
+      {/* Alertas proativos — visivel quando snapshot tem alertas ativos */}
+      {snapshot.alertas && snapshot.alertas.length > 0 && (
+        <AlertasBanner alertas={snapshot.alertas} />
       )}
 
       {/* Content */}
