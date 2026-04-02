@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Grid2X2, Inbox, Settings, Users, UserCheck, ScrollText, User, BookOpen, Terminal, BarChart3, ShieldCheck } from 'lucide-react'
+import { Grid2X2, Inbox, Settings, Users, UserCheck, ScrollText, User, BookOpen, Terminal, BarChart3, ShieldCheck, Wrench } from 'lucide-react'
 import { useRouter, type ViewName } from '../router'
 import type { Demanda } from '../types/ipc'
 
@@ -51,7 +51,8 @@ export function Sidebar() {
     { id: 'dashboard', label: 'Time',     icon: <Grid2X2 size={14} /> },
     { id: 'pares',     label: 'Pares',    icon: <Users size={14} /> },
     { id: 'gestores',  label: 'Gestores', icon: <UserCheck size={14} /> },
-    { id: 'feed',      label: 'Reuniões', icon: <ScrollText size={14} /> },
+    { id: 'feed',       label: 'Reuniões',    icon: <ScrollText size={14} /> },
+    { id: 'sustentacao', label: 'Sustentação', icon: <Wrench size={14} /> },
     { id: 'eu',           label: 'Eu',           icon: <User size={14} />, badge: openDemandasCount > 0 ? openDemandasCount : undefined },
     { id: 'reports',      label: 'Relatórios',   icon: <BarChart3 size={14} /> },
     { id: 'refinamentos', label: 'Refinamentos', icon: <BookOpen size={14} /> },

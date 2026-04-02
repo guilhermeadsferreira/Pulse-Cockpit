@@ -12,6 +12,7 @@ import { RefinamentosView }   from './views/RefinamentosView'
 import LogsView               from './views/LogsView'
 import { RelatoriosView }     from './views/RelatoriosView'
 import { AuditView }          from './views/AuditView'
+import { SustentacaoView }    from './views/SustentacaoView'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   constructor(props: { children: ReactNode }) {
@@ -74,6 +75,7 @@ function AppContent() {
     'logs':          <LogsView />,
     'reports':       <RelatoriosView />,
     'audit':         <AuditView />,
+    'sustentacao':   <SustentacaoView />,
   }[view] ?? <DashboardView relacao="liderado" />
 
   return <Layout>{content}</Layout>
