@@ -118,8 +118,8 @@ Requirements para este milestone. Cada um mapeia para phases do roadmap.
 - [x] **SRCP-01**: fetchSustentacaoForReport() exportada no SupportBoardClient — busca snapshot sem IPC, retorna null quando nao configurado, graceful degradation via try/catch
 - [x] **SRCP-02**: Daily report inclui secao "Sustentacao" com carga total, breach count, SLA compliance e tabela de carga por pessoa (porAssignee cruzado com nomes do time)
 - [x] **SRCP-03**: Prompt daily-analysis recebe campo sustentacao? e instrucao de cruzamento produtividade×suporte — "fulano carrega X tickets E velocity baixa"
-- [ ] **SRCP-04**: MetricsWriter.writeSustentacaoWeekly() persiste SustentacaoWeeklyEntry (semana, ticketsAbertos, breachCount, complianceRate7d) em secao SUSTENTACAO_SEMANAL com retencao de 12 entradas
-- [ ] **SRCP-05**: Weekly report inclui secao "Sustentacao da Semana" com cruzamento inline (pessoa com >= 3 tickets E zero SP → nota de impacto); chama writeSustentacaoWeekly() para cada pessoa com tickets no porAssignee
+- [x] **SRCP-04**: MetricsWriter.writeSustentacaoWeekly() persiste SustentacaoWeeklyEntry (semana, ticketsAbertos, breachCount, complianceRate7d) em secao SUSTENTACAO_SEMANAL com retencao de 12 entradas
+- [x] **SRCP-05**: Weekly report inclui secao "Sustentacao da Semana" com cruzamento inline (pessoa com >= 3 tickets E zero SP → nota de impacto); chama writeSustentacaoWeekly() para cada pessoa com tickets no porAssignee
 
 ## v2 Requirements
 

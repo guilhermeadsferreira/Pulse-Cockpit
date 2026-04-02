@@ -75,11 +75,16 @@ export class WeeklyReportGenerator {
     const registry = new PersonRegistry(this.workspacePath)
     const people = registry.list().filter(p => p.relacao === 'liderado')
     const settings = SettingsManager.load()
+    const eligible = people.filter(p => p.jiraEmail || p.githubUsername)
 
     const personReports: PersonWeeklyData[] = []
 
-    for (const person of people) {
+    for (let i = 0; i < people.length; i++) {
+      const person = people[i]
       if (!person.jiraEmail && !person.githubUsername) continue
+
+      const pct = 10 + Math.round((i / eligible.length) * 60)
+      progress('person-data', `Coletando dados de ${person.nome}…`, pct)
 
       let snapshot: ExternalDataSnapshot | null = null
       let weeklyGithub: WeeklyGitHubData = { commits: 0, prsMerged: 0, reviews: 0 }
@@ -136,6 +141,7 @@ export class WeeklyReportGenerator {
     progress('build', 'Montando relatório…', 75)
     const content = this.buildReport(personReports, start, end, sustentacaoSnapshot)
 
+
     progress('write', 'Salvando relatório…', 90)
     mkdirSync(this.relatoriosDir, { recursive: true })
     writeFileSync(filePath, content, 'utf-8')
@@ -191,6 +197,7 @@ export class WeeklyReportGenerator {
         }
       }
     }
+
 
     progress('done', 'Relatório weekly concluído!', 100)
     return filePath
