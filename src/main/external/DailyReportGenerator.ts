@@ -792,7 +792,11 @@ export class DailyReportGenerator {
           const statusIcon = phase.status === 'ok' ? '\u2705' : phase.status === 'warning' ? '\u26A0\uFE0F' : '\uD83D\uDD34'
           const line = `| ${phase.fase} | ${phase.tasks} | ${tempoStr} | ${antigaStr} | ${baselineStr} | ${statusIcon} |`
           lines.push(line)
-          pipelineLines.push(`${phase.fase}: ${phase.tasks} tasks, tempo medio ${tempoStr}, baseline ${baselineStr}, status ${phase.status}`)
+          let phLine = `${phase.fase}: ${phase.tasks} tasks, tempo medio ${tempoStr}, baseline ${baselineStr}, status ${phase.status}`
+          if (phase.maisAntiga) {
+            phLine += `\n  Mais antiga: ${phase.maisAntiga.key} (${phase.maisAntiga.dias}d)`
+          }
+          pipelineLines.push(phLine)
         }
         lines.push('')
         pipelineHealthText = pipelineLines.join('\n')
