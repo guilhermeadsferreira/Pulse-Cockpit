@@ -26,6 +26,8 @@ import { WeeklyReportGenerator } from './external/WeeklyReportGenerator'
 import { MonthlyReportGenerator } from './external/MonthlyReportGenerator'
 import { GitHubClient } from './external/GitHubClient'
 import { SystemAuditor } from './audit/SystemAuditor'
+import { fetchSupportBoardMetrics } from './external/SupportBoardClient'
+import type { SupportBoardSnapshot } from '../renderer/src/types/ipc'
 import yaml from 'js-yaml'
 
 interface ExternalJiraSnapshot {
@@ -1105,6 +1107,64 @@ function registerIpcHandlers(): void {
     } catch (err) {
       return { error: err instanceof Error ? err.message : String(err) }
     }
+  })
+
+  // ── Sustentacao Board ─────────────────────────────────────────
+  async function fetchAndCacheSustentacao(): Promise<SupportBoardSnapshot | null> {
+    const settings = SettingsManager.load()
+    const { jiraSupportProjectKey, jiraBaseUrl, jiraEmail, jiraApiToken, jiraSlaThresholds } = settings
+
+    if (!jiraSupportProjectKey || !jiraBaseUrl || !jiraEmail || !jiraApiToken) {
+      return null
+    }
+
+    const cacheDir = join(settings.workspacePath, '..', 'cache', 'sustentacao')
+    const cacheFile = join(cacheDir, 'board.json')
+    const CACHE_TTL_MS = 60 * 60 * 1000
+
+    try {
+      if (existsSync(cacheFile)) {
+        const cached = JSON.parse(readFileSync(cacheFile, 'utf-8')) as { data: SupportBoardSnapshot; fetchedAt: number }
+        if (Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+          Logger.getInstance().child('IPC').info('sustentacao:get-data cache hit')
+          return cached.data
+        }
+      }
+    } catch { /* cache inválido — refetch */ }
+
+    Logger.getInstance().child('IPC').info('sustentacao:get-data buscando board', { projectKey: jiraSupportProjectKey })
+
+    const data = await fetchSupportBoardMetrics({
+      config: { baseUrl: jiraBaseUrl, email: jiraEmail, apiToken: jiraApiToken },
+      projectKey: jiraSupportProjectKey,
+      slaThresholds: jiraSlaThresholds,
+    })
+
+    try {
+      if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true })
+      writeFileSync(cacheFile, JSON.stringify({ data, fetchedAt: Date.now() }), 'utf-8')
+    } catch (err) {
+      Logger.getInstance().child('IPC').warn('sustentacao:get-data falha ao gravar cache', { error: err instanceof Error ? err.message : String(err) })
+    }
+
+    return data
+  }
+
+  ipcMain.handle('sustentacao:get-data', async (): Promise<SupportBoardSnapshot | null> => {
+    return fetchAndCacheSustentacao()
+  })
+
+  ipcMain.handle('sustentacao:refresh', async (): Promise<SupportBoardSnapshot | null> => {
+    const settings = SettingsManager.load()
+    const cacheFile = join(settings.workspacePath, '..', 'cache', 'sustentacao', 'board.json')
+
+    try {
+      if (existsSync(cacheFile)) {
+        writeFileSync(cacheFile, JSON.stringify({ data: null, fetchedAt: 0 }), 'utf-8')
+      }
+    } catch { /* ignore */ }
+
+    return fetchAndCacheSustentacao()
   })
 }
 
