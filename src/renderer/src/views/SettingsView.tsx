@@ -13,9 +13,14 @@ export function SettingsView() {
   const [showProviderOverrides, setShowProviderOverrides] = useState(false)
   const [syncingRepos, setSyncingRepos] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [slaThresholdsText, setSlaThresholdsText] = useState('')
+  const [slaThresholdsError, setSlaThresholdsError] = useState<string | null>(null)
 
   useEffect(() => {
-    window.api.settings.load().then(setForm)
+    window.api.settings.load().then((s) => {
+      setForm(s)
+      setSlaThresholdsText(JSON.stringify(s.jiraSlaThresholds ?? {}, null, 2))
+    })
   }, [])
 
   function set(field: keyof AppSettings, value: unknown) {
@@ -477,6 +482,71 @@ export function SettingsView() {
                 <AlertCircle size={12} /> Configure a URL do Jira para ativar
               </StatusLine>
             )}
+
+            {/* Board de Sustentação */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', marginTop: 6, paddingTop: 14 }}>
+              <div style={{ fontWeight: 500, fontSize: 12, color: 'var(--text-primary)', marginBottom: 12 }}>Board de Sustentação</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <Field
+                  label="Project Key do Board de Sustentação"
+                  hint="Ex: SUP, HELP, ATC"
+                >
+                  <input
+                    style={styles.input}
+                    type="text"
+                    value={form.jiraSupportProjectKey ?? ''}
+                    onChange={(e) => set('jiraSupportProjectKey', e.target.value || undefined)}
+                    placeholder="ex: SUP, HELP, ATC"
+                  />
+                </Field>
+                <Field
+                  label="Board ID do Board de Sustentação"
+                  hint="ID numérico do board Jira de suporte"
+                >
+                  <input
+                    style={styles.input}
+                    type="number"
+                    value={form.jiraSupportBoardId ?? ''}
+                    onChange={(e) => set('jiraSupportBoardId', Number(e.target.value) || undefined)}
+                    placeholder="ex: 42"
+                  />
+                </Field>
+                <Field
+                  label="SLA Thresholds por Tipo (JSON)"
+                  hint='Dias máximos por tipo de issue. Ex: {"Bug": 3, "Task": 7, "Story": 5}'
+                >
+                  <textarea
+                    style={{
+                      ...styles.input,
+                      width: '100%',
+                      height: 72,
+                      resize: 'vertical',
+                      fontFamily: 'var(--font-mono)',
+                      lineHeight: 1.5,
+                    }}
+                    rows={3}
+                    value={slaThresholdsText}
+                    onChange={(e) => {
+                      setSlaThresholdsText(e.target.value)
+                      setSlaThresholdsError(null)
+                    }}
+                    onBlur={() => {
+                      try {
+                        const parsed = JSON.parse(slaThresholdsText)
+                        set('jiraSlaThresholds', parsed)
+                        setSlaThresholdsError(null)
+                      } catch {
+                        setSlaThresholdsError('JSON inválido')
+                      }
+                    }}
+                    placeholder='{"Bug": 3, "Task": 7, "Story": 5}'
+                  />
+                  {slaThresholdsError && (
+                    <StatusLine ok={false}>{slaThresholdsError}</StatusLine>
+                  )}
+                </Field>
+              </div>
+            </div>
           </Section>
 
           {/* GitHub */}
