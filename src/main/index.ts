@@ -1459,6 +1459,22 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('brain:runWeeklySynthesis', async (_event, slug?: string) => {
+    const settings = SettingsManager.load()
+    const { WeeklySynthesisRunner } = await import('./external/WeeklySynthesisRunner')
+    const runner = new WeeklySynthesisRunner(settings.workspacePath)
+    try {
+      if (slug) {
+        await runner.runForPerson(slug, settings)
+      } else {
+        await runner.runForAllLiderados(settings)
+      }
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
   // ── Sustentacao Board ─────────────────────────────────────────
 
   ipcMain.handle('sustentacao:get-data', async (): Promise<SupportBoardSnapshot | null> => {

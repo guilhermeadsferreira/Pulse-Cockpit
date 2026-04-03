@@ -134,6 +134,7 @@ declare global {
       brain: {
         detect:    () => Promise<BrainResult | { error: string }>
         getLatest: () => Promise<BrainResult | null>
+        runWeeklySynthesis: (slug?: string) => Promise<{ success: boolean; error?: string }>
       }
 
       sustentacao: {
