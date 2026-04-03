@@ -30,7 +30,7 @@ import { detectConvergencia, type BrainResult } from './brain/RiskDetector'
 import { fetchSupportBoardMetricsWithIssues, calcularAlertas } from './external/SupportBoardClient'
 import type { SupportBoardSnapshot, SustentacaoHistoryEntry, TicketAnalysisSnapshot, EnrichedSupportTicket } from '../renderer/src/types/ipc'
 import { buildSustentacaoPrompt } from './prompts/sustentacao-analysis.prompt'
-import { buildTicketAnalysisPrompt, batchTickets } from './prompts/sustentacao-ticket-analysis.prompt'
+import { buildTicketAnalysisPrompt, batchTickets, type AssigneeContext } from './prompts/sustentacao-ticket-analysis.prompt'
 import { buildEnrichedTicket } from './external/TicketEnricher'
 import { AnalysisSnapshotStore } from './external/AnalysisSnapshotStore'
 import { MetricsWriter } from './external/MetricsWriter'
@@ -350,9 +350,22 @@ export async function fetchAndCacheSustentacao(): Promise<SupportBoardSnapshot |
   return { ...dataComAlertas, history: historyData }
 }
 
+export interface PerAssigneeSummary {
+  email: string
+  nome: string
+  nivel: string
+  totalTickets: number
+  emBreach: number
+  riskAlto: number
+  blockers: number
+  workloadExterno: string
+  alertas: string[]
+}
+
 export async function runTicketAnalysisInternal(): Promise<{
   enrichedTickets?: EnrichedSupportTicket[]
   executiveSummary?: TicketAnalysisSnapshot['executiveSummary'] | null
+  perAssigneeSummary?: PerAssigneeSummary[]
   error?: string
 }> {
   const settings = SettingsManager.load()
@@ -391,10 +404,43 @@ export async function runTicketAnalysisInternal(): Promise<{
 
   const log = Logger.getInstance().child('Sustentacao')
 
+  // Build assignee context map for per-person intelligence
+  const assigneeContextMap = new Map<string, AssigneeContext>()
+  const personRegistry = new PersonRegistry(workspacePath)
+  const uniqueAssignees = [...new Set(ticketsToAnalyze.map(t => t.assignee).filter(Boolean))] as string[]
+  for (const assigneeKey of uniqueAssignees) {
+    const pessoa = personRegistry.findByJiraEmail(assigneeKey)
+    if (!pessoa) continue
+    const extPath = join(workspacePath, 'pessoas', pessoa.slug, 'external_data.yaml')
+    let wl = 'desconhecido'
+    let issues = 0
+    let blockers = 0
+    if (existsSync(extPath)) {
+      try {
+        const ext = yaml.load(readFileSync(extPath, 'utf-8')) as Record<string, unknown>
+        const atual = ext?.atual as Record<string, unknown> | undefined
+        const jira = atual?.jira as Record<string, unknown> | undefined
+        if (jira) {
+          wl = (jira.workloadScore as string) ?? 'desconhecido'
+          issues = (jira.issuesAbertas as number) ?? 0
+          const bl = jira.blockersAtivos as unknown[] | undefined
+          blockers = bl?.length ?? 0
+        }
+      } catch { /* graceful */ }
+    }
+    assigneeContextMap.set(assigneeKey, {
+      nome: pessoa.nome,
+      nivel: pessoa.nivel,
+      workloadScore: wl,
+      issuesAbertas: issues,
+      blockersAtivos: blockers,
+    })
+  }
+
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i]
     const isLastBatch = i === batches.length - 1
-    const prompt = buildTicketAnalysisPrompt(batch, previousAnalysis, isLastBatch, allTicketKeys)
+    const prompt = buildTicketAnalysisPrompt(batch, previousAnalysis, isLastBatch, allTicketKeys, assigneeContextMap)
 
     log.info('ticket-analysis batch', {
       batch: i + 1,
@@ -466,7 +512,6 @@ export async function runTicketAnalysisInternal(): Promise<{
 
   // Persistir resumo no metricas.md dos assignees relevantes
   const metricsWriter = new MetricsWriter(workspacePath)
-  const personRegistry = new PersonRegistry(workspacePath)
   const people = personRegistry.list()
 
   if (executiveSummary) {
@@ -491,7 +536,39 @@ export async function runTicketAnalysisInternal(): Promise<{
     }
   }
 
-  return { enrichedTickets: ticketsToAnalyze, executiveSummary }
+  // Build per-assignee summary
+  const perAssigneeMap = new Map<string, EnrichedSupportTicket[]>()
+  for (const ticket of ticketsToAnalyze) {
+    const key = ticket.assignee ?? 'sem_assignee'
+    if (!perAssigneeMap.has(key)) perAssigneeMap.set(key, [])
+    perAssigneeMap.get(key)!.push(ticket)
+  }
+
+  const perAssigneeSummary: PerAssigneeSummary[] = [...perAssigneeMap.entries()].map(([email, tks]) => {
+    const ctx = assigneeContextMap.get(email)
+    const emBreach = tks.filter(t => t.slaBreached).length
+    const riskAlto = tks.filter(t => t.intelligence?.riskLevel === 'critical' || t.intelligence?.riskLevel === 'high').length
+    const blockers = tks.filter(t => t.deterministicContext.inferredBlocker).length
+    const alertas: string[] = []
+    if (emBreach > 0) alertas.push(`${emBreach} ticket(s) em breach`)
+    if (riskAlto > 0) alertas.push(`${riskAlto} ticket(s) risco alto`)
+    if (ctx?.workloadScore === 'alto' && tks.length >= 3) {
+      alertas.push(`Possível sobrecarga: ${tks.length} tickets + workload Jira alto`)
+    }
+    return {
+      email,
+      nome: ctx?.nome ?? email,
+      nivel: ctx?.nivel ?? 'desconhecido',
+      totalTickets: tks.length,
+      emBreach,
+      riskAlto,
+      blockers,
+      workloadExterno: ctx?.workloadScore ?? 'desconhecido',
+      alertas,
+    }
+  })
+
+  return { enrichedTickets: ticketsToAnalyze, executiveSummary, perAssigneeSummary }
 }
 
 function registerIpcHandlers(): void {
