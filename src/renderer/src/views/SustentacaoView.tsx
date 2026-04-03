@@ -207,7 +207,7 @@ function RiskDot({ level }: { level: string }) {
 
 function AlertCard({ alerta }: { alerta: SustentacaoAlerta }) {
   const [expanded, setExpanded] = useState(false)
-  const hasDetail = !!(alerta.ticketKey && (alerta.lastComment || alerta.intelligence))
+  const hasDetail = !!(alerta.ticketKey && ((alerta.comments && alerta.comments.length > 0) || alerta.intelligence))
   const isCritico = alerta.severidade === 'critico'
 
   return (
@@ -309,27 +309,36 @@ function AlertCard({ alerta }: { alerta: SustentacaoAlerta }) {
             </div>
           )}
 
-          {alerta.lastComment && (
+          {alerta.comments && alerta.comments.length > 0 && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                Último comentário
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Histórico de comentários · {alerta.comments.length} mensage{alerta.comments.length > 1 ? 'ns' : 'm'}
               </div>
-              <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <span style={{ fontWeight: 600 }}>{alerta.lastComment.author}</span>
-                <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 6 }}>
-                  {formatRelativeDate(alerta.lastComment.created)}
-                </span>
-                <div style={{
-                  marginTop: 4, borderLeft: '2px solid var(--border)', paddingLeft: 8,
-                  fontStyle: 'italic', color: 'var(--text-muted)',
-                }}>
-                  {alerta.lastComment.body.slice(0, 300)}{alerta.lastComment.body.length > 300 ? '…' : ''}
-                </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
+                {alerta.comments.map((c, ci) => {
+                  const isLast = ci === alerta.comments!.length - 1
+                  return (
+                    <div key={ci} style={{
+                      borderLeft: `2px solid ${isLast ? 'var(--accent)' : 'var(--border)'}`,
+                      paddingLeft: 8,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{c.author}</span>
+                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                          {new Date(c.created).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {c.body}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
 
-          {!alerta.intelligence?.narrative && !alerta.lastComment && (
+          {!alerta.intelligence?.narrative && (!alerta.comments || alerta.comments.length === 0) && (
             <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>
               Clique em &ldquo;Analisar sustentação&rdquo; para gerar análise detalhada.
             </div>

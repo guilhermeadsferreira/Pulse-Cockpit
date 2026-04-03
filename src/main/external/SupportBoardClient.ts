@@ -6,7 +6,7 @@ import type { AppSettings } from '../registry/SettingsManager'
 const log = Logger.getInstance().child('SupportBoardClient')
 
 const DEFAULT_SLA_DIAS = 5
-const BREACH_COMMENTS_MAX = 10
+const BREACH_COMMENTS_MAX = 20
 const MAX_COMMENT_FETCHES = 15
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 const TOP_N = 5
@@ -352,13 +352,11 @@ export function calcularAlertas(
   for (const ticket of snapshot.ticketsEmBreach) {
     const threshold = slaThresholds[ticket.type] ?? DEFAULT_SLA_DIAS
     if (ticket.ageDias > ALRT_SLA_MULTIPLIER * threshold) {
-      const lastComment = ticket.recentComments.length > 0
-        ? {
-            author: ticket.recentComments[0].author,
-            body: ticket.recentComments[0].body.slice(0, 150),
-            created: ticket.recentComments[0].created,
-          }
-        : null
+      const comments = ticket.recentComments.length > 0
+        ? [...ticket.recentComments]
+            .reverse()
+            .map(c => ({ author: c.author, body: c.body, created: c.created }))
+        : undefined
       alertas.push({
         tipo: 'ticket_envelhecendo',
         mensagem: `${ticket.key}: ${ticket.ageDias}d aberto (limite ${threshold}d, threshold critico ${ALRT_SLA_MULTIPLIER * threshold}d)`,
@@ -367,7 +365,7 @@ export function calcularAlertas(
         summary: ticket.summary,
         status: ticket.status,
         assignee: ticket.assignee,
-        lastComment,
+        comments,
         jiraUrl: jiraBaseUrl ? `${jiraBaseUrl}/browse/${ticket.key}` : undefined,
       })
     }

@@ -313,8 +313,8 @@ export interface SustentacaoAlerta {
   status?: string
   /** Assignee do ticket */
   assignee?: string | null
-  /** Último comentário do ticket (body truncado, autor, data) */
-  lastComment?: { author: string; body: string; created: string } | null
+  /** Histórico de comentários em ordem cronológica (mais antigo primeiro) */
+  comments?: Array<{ author: string; body: string; created: string }>
   /** URL direta para o ticket no Jira */
   jiraUrl?: string
   /** Inteligência por ticket gerada pela IA (null antes da análise) */
