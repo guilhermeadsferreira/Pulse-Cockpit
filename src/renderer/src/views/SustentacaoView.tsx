@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { RefreshCw, Loader2, Wrench, AlertTriangle, AlertCircle } from 'lucide-react'
+import { RefreshCw, Loader2, Wrench, AlertTriangle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useRouter } from '../router'
 import type { SupportBoardSnapshot, SustentacaoHistoryEntry, InOutSemanalEntry, RecorrenteDetectado, SustentacaoAlerta, BlockerCategory } from '../types/ipc'
 
@@ -205,11 +205,154 @@ function RiskDot({ level }: { level: string }) {
   )
 }
 
+function AlertCard({ alerta }: { alerta: SustentacaoAlerta }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasDetail = !!(alerta.ticketKey && ((alerta.comments && alerta.comments.length > 0) || alerta.intelligence))
+  const isCritico = alerta.severidade === 'critico'
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      borderRadius: 6, overflow: 'hidden',
+      background: isCritico ? 'rgba(184,64,64,0.08)' : 'rgba(255,255,255,0.03)',
+      border: `1px solid ${isCritico ? 'rgba(184,64,64,0.2)' : 'var(--border)'}`,
+    }}>
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'flex-start', gap: 8,
+          padding: '8px 12px', cursor: hasDetail ? 'pointer' : 'default',
+        }}
+        onClick={() => hasDetail && setExpanded(v => !v)}
+      >
+        {isCritico
+          ? <AlertCircle size={12} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 2 }} />
+          : <AlertTriangle size={12} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
+        }
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12.5, lineHeight: 1.45 }}>
+            <span style={{
+              fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+              color: isCritico ? 'var(--red)' : 'var(--accent)',
+            }}>
+              {isCritico ? 'CRÍTICO' : 'ATENÇÃO'}
+            </span>
+            {alerta.ticketKey && (
+              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                {alerta.jiraUrl ? (
+                  <a
+                    href="#"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); window.open(alerta.jiraUrl, '_blank') }}
+                    style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}
+                  >
+                    {alerta.ticketKey} ↗
+                  </a>
+                ) : alerta.ticketKey}
+              </span>
+            )}
+            {alerta.intelligence?.narrative && (
+              <>
+                {alerta.intelligence.blocker?.category && <BlockerBadge category={alerta.intelligence.blocker.category} />}
+                <RiskDot level={alerta.intelligence.riskLevel ?? 'medium'} />
+              </>
+            )}
+          </div>
+          {alerta.summary ? (
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {alerta.summary}
+              <span style={{ color: 'var(--text-muted)', fontSize: 11.5, marginLeft: 6 }}>
+                ({alerta.mensagem.match(/(\d+)d aberto/)?.[1] ?? '?'}d
+                {alerta.status ? `, ${alerta.status}` : ''}
+                {alerta.assignee ? `, ${alerta.assignee}` : ''})
+              </span>
+            </div>
+          ) : (
+            <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2 }}>
+              {alerta.mensagem}
+            </div>
+          )}
+        </div>
+        {hasDetail && (
+          <div style={{ flexShrink: 0, color: 'var(--text-muted)', marginTop: 2 }}>
+            {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </div>
+        )}
+      </div>
+
+      {/* Expanded detail */}
+      {expanded && (
+        <div style={{
+          padding: '0 12px 10px 32px',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          {alerta.intelligence?.narrative && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                Análise IA
+              </div>
+              <div style={{
+                fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5,
+                borderLeft: '2px solid var(--border)', paddingLeft: 8,
+              }}>
+                {alerta.intelligence.narrative}
+              </div>
+              {alerta.intelligence.recommendedAction && (
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--accent)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  → {alerta.intelligence.recommendedAction}
+                </div>
+              )}
+              {alerta.intelligence.evolution && (
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2, fontStyle: 'italic' }}>
+                  {alerta.intelligence.evolution}
+                </div>
+              )}
+            </div>
+          )}
+
+          {alerta.comments && alerta.comments.length > 0 && (
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                Histórico de comentários · {alerta.comments.length} mensage{alerta.comments.length > 1 ? 'ns' : 'm'}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 300, overflowY: 'auto' }}>
+                {alerta.comments.map((c, ci) => {
+                  const isLast = ci === alerta.comments!.length - 1
+                  return (
+                    <div key={ci} style={{
+                      borderLeft: `2px solid ${isLast ? 'var(--accent)' : 'var(--border)'}`,
+                      paddingLeft: 8,
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{c.author}</span>
+                        <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                          {new Date(c.created).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {c.body}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {!alerta.intelligence?.narrative && (!alerta.comments || alerta.comments.length === 0) && (
+            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Clique em &ldquo;Analisar sustentação&rdquo; para gerar análise detalhada.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function AlertasBanner({ alertas }: { alertas: SustentacaoAlerta[] }) {
   if (alertas.length === 0) return null
 
   const sorted = [...alertas].sort((a, b) => {
-    // critico primeiro
     if (a.severidade === 'critico' && b.severidade !== 'critico') return -1
     if (b.severidade === 'critico' && a.severidade !== 'critico') return 1
     return 0
@@ -218,109 +361,20 @@ function AlertasBanner({ alertas }: { alertas: SustentacaoAlerta[] }) {
   return (
     <div style={{
       margin: '0 40px 16px',
-      background: 'var(--red-dim)',
-      border: '1px solid rgba(184,64,64,0.25)',
-      borderRadius: 8,
-      padding: '12px 16px',
+      display: 'flex', flexDirection: 'column', gap: 6,
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 6,
         fontSize: 12.5, fontWeight: 600,
         color: 'var(--red)',
-        marginBottom: sorted.length > 0 ? 8 : 0,
         fontFamily: 'var(--font)',
       }}>
         <AlertTriangle size={13} />
-        {sorted.length === 1 ? '1 alerta ativo' : `${sorted.length} alertas ativos`}
+        {sorted.length} ALERTA{sorted.length > 1 ? 'S' : ''} ATIVO{sorted.length > 1 ? 'S' : ''}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {sorted.map((alerta, i) => (
-          <div key={i} style={{
-            display: 'flex', flexDirection: 'column', gap: 2,
-            fontSize: 12.5, color: 'var(--text-secondary)',
-            lineHeight: 1.45,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-              {alerta.severidade === 'critico'
-                ? <AlertCircle size={12} style={{ color: 'var(--red)', flexShrink: 0, marginTop: 2 }} />
-                : <AlertTriangle size={12} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
-              }
-              <div style={{ flex: 1 }}>
-                {alerta.summary ? (
-                  <>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ fontWeight: 600 }}>
-                        {alerta.jiraUrl ? (
-                          <a
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); window.open(alerta.jiraUrl, '_blank') }}
-                            style={{ color: 'var(--text-secondary)', textDecoration: 'underline' }}
-                          >
-                            {alerta.ticketKey}
-                          </a>
-                        ) : (
-                          alerta.ticketKey
-                        )}
-                      </span>
-                      {' — '}
-                      {alerta.summary}
-                      <span style={{ color: 'var(--text-muted)' }}>
-                        ({alerta.mensagem.match(/(\d+)d aberto/)?.[1] ?? '?'}d
-                        {alerta.status ? `, ${alerta.status}` : ''}
-                        {alerta.assignee ? `, ${alerta.assignee}` : ''})
-                      </span>
-                      {alerta.intelligence && (
-                        <>
-                          <BlockerBadge category={alerta.intelligence.blocker.category} />
-                          <RiskDot level={alerta.intelligence.riskLevel} />
-                        </>
-                      )}
-                    </div>
-                    {alerta.intelligence ? (
-                      <div style={{ marginTop: 4, paddingLeft: 2 }}>
-                        <div style={{
-                          fontSize: 12, color: 'var(--text-secondary)',
-                          lineHeight: 1.5, marginBottom: 4,
-                          borderLeft: '2px solid var(--border)',
-                          paddingLeft: 8,
-                        }}>
-                          {alerta.intelligence.narrative}
-                        </div>
-                        <div style={{
-                          fontSize: 11.5, fontWeight: 600,
-                          color: 'var(--accent)',
-                          display: 'flex', alignItems: 'center', gap: 4,
-                        }}>
-                          → {alerta.intelligence.recommendedAction}
-                        </div>
-                        {alerta.intelligence.evolution && (
-                          <div style={{
-                            fontSize: 10.5, color: 'var(--text-muted)',
-                            marginTop: 2, fontStyle: 'italic',
-                          }}>
-                            {alerta.intelligence.evolution}
-                          </div>
-                        )}
-                      </div>
-                    ) : alerta.lastComment ? (
-                      <div style={{
-                        fontSize: 11.5, color: 'var(--text-muted)',
-                        marginTop: 2, paddingLeft: 2,
-                        fontStyle: 'italic',
-                      }}>
-                        &ldquo;{alerta.lastComment.body.slice(0, 120)}{alerta.lastComment.body.length > 120 ? '…' : ''}&rdquo;
-                        {' — '}{alerta.lastComment.author}, {formatRelativeDate(alerta.lastComment.created)}
-                      </div>
-                    ) : null}
-                  </>
-                ) : (
-                  alerta.mensagem
-                )}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+      {sorted.map((alerta, i) => (
+        <AlertCard key={i} alerta={alerta} />
+      ))}
     </div>
   )
 }
@@ -445,18 +499,28 @@ function IntelOperacionalSection({
                 border: '1px solid rgba(184, 64, 64, 0.2)',
               }}>
                 <span style={{ fontSize: 13 }}>⚠️</span>
-                <span style={{
-                  fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font)',
-                  flex: 1,
-                }}>
-                  <strong>{r.tipo}</strong>
-                  {r.label && <span style={{ color: 'var(--text-muted)' }}> · {r.label}</span>}
-                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{
+                    fontSize: 12.5, color: 'var(--text-primary)', fontFamily: 'var(--font)',
+                    fontWeight: 600, textTransform: 'capitalize',
+                  }}>
+                    {r.tema}
+                  </span>
+                  {r.exemplos?.length > 0 && (
+                    <div style={{
+                      fontSize: 11, color: 'var(--text-muted)', marginTop: 2,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}>
+                      {r.exemplos[0]}
+                      {r.exemplos.length > 1 ? ` +${r.exemplos.length - 1} similar` : ''}
+                    </div>
+                  )}
+                </div>
                 <span style={{
                   fontSize: 12, color: 'var(--red)', fontFamily: 'var(--font-mono)',
-                  fontWeight: 600,
+                  fontWeight: 600, flexShrink: 0,
                 }}>
-                  {r.ocorrencias}x em 30d
+                  {r.ocorrencias}x
                 </span>
               </div>
             ))}

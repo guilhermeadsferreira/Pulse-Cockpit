@@ -1126,8 +1126,9 @@ export class DailyReportGenerator {
             const assigneeStr = alerta.assignee ? `, ${alerta.assignee}` : ''
             const statusStr = alerta.status ? `, ${alerta.status}` : ''
             lines_sust.push(`- **${alerta.ticketKey}** — ${alerta.summary} (${alerta.mensagem.match(/(\d+)d aberto/)?.[1] ?? '?'}d${statusStr}${assigneeStr})`)
-            if (alerta.lastComment) {
-              lines_sust.push(`  > "${alerta.lastComment.body.slice(0, 120)}${alerta.lastComment.body.length > 120 ? '…' : ''}" — ${alerta.lastComment.author}`)
+            const lastComment = alerta.comments?.length ? alerta.comments[alerta.comments.length - 1] : null
+            if (lastComment) {
+              lines_sust.push(`  > "${lastComment.body.slice(0, 120)}${lastComment.body.length > 120 ? '…' : ''}" — ${lastComment.author}`)
             }
           } else {
             lines_sust.push(`- ${alerta.mensagem}`)
@@ -1144,7 +1145,8 @@ export class DailyReportGenerator {
         alertasTextParts.push(`Alertas criticos sustentação (${alertasCriticos.length}):`)
         for (const a of alertasCriticos.slice(0, 5)) {
           if (a.summary) {
-            const commentSnippet = a.lastComment ? ` | ultimo comentario: "${a.lastComment.body.slice(0, 100)}"` : ''
+            const lc = a.comments?.length ? a.comments[a.comments.length - 1] : null
+            const commentSnippet = lc ? ` | ultimo comentario: "${lc.body.slice(0, 100)}"` : ''
             alertasTextParts.push(`  - ${a.ticketKey}: ${a.summary} (${a.status ?? '?'}, ${a.assignee ?? 'sem assignee'})${commentSnippet}`)
           } else {
             alertasTextParts.push(`  - ${a.mensagem}`)

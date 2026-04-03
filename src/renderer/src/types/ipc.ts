@@ -313,8 +313,8 @@ export interface SustentacaoAlerta {
   status?: string
   /** Assignee do ticket */
   assignee?: string | null
-  /** Último comentário do ticket (body truncado, autor, data) */
-  lastComment?: { author: string; body: string; created: string } | null
+  /** Histórico de comentários em ordem cronológica (mais antigo primeiro) */
+  comments?: Array<{ author: string; body: string; created: string }>
   /** URL direta para o ticket no Jira */
   jiraUrl?: string
   /** Inteligência por ticket gerada pela IA (null antes da análise) */
@@ -331,14 +331,14 @@ export interface InOutSemanalEntry {
   out: number
 }
 
-/** Tipo de ticket recorrente detectado nos últimos 30 dias (>2 ocorrências). */
+/** Tema recorrente detectado nos últimos 30 dias (>1 ocorrência), agrupado por assunto do título. */
 export interface RecorrenteDetectado {
-  /** Tipo do ticket (ex: "Bug", "Task") */
-  tipo: string
-  /** Label associado (ex: "auth", "performance") — null se sem label relevante */
-  label: string | null
+  /** Tema extraído do título (ex: "PJtinha reprovado", "Saldo negativo") */
+  tema: string
   /** Número de ocorrências nos últimos 30 dias */
   ocorrencias: number
+  /** Até 3 títulos reais de tickets para contexto */
+  exemplos: string[]
 }
 
 export interface ExternalHistoricoEntry {

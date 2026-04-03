@@ -6,7 +6,7 @@ import type { AppSettings } from '../registry/SettingsManager'
 const log = Logger.getInstance().child('SupportBoardClient')
 
 const DEFAULT_SLA_DIAS = 5
-const BREACH_COMMENTS_MAX = 10
+const BREACH_COMMENTS_MAX = 20
 const MAX_COMMENT_FETCHES = 15
 const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000
 const TOP_N = 5
@@ -149,32 +149,35 @@ function calcularInOutSemanal(
 }
 
 /**
- * Detecta tipos+labels recorrentes (>2 ocorrências nos últimos 30 dias).
- * Considera todos os tickets (abertos e fechados) criados nos últimos 30d.
- * Combina tipo e primeira label; se sem label, usa null.
+ * Detecta temas recorrentes por título (>1 ocorrência nos últimos N dias).
+ * Usa extrairTema() para agrupar tickets pelo assunto real do summary,
+ * em vez de tipo/label Jira (que não tem significado para o gestor).
  */
 function detectarRecorrentes(
-  issues: Array<{ type: string; labels: string[]; created: string }>,
-  windowDias: number
+  issues: Array<{ summary: string; created: string }>,
+  windowDias: number,
+  compiledCategories: Array<{ regex: RegExp; tema: string }>,
 ): RecorrenteDetectado[] {
   const cutoff = Date.now() - windowDias * 24 * 60 * 60 * 1000
   const recent = issues.filter((i) => new Date(i.created).getTime() >= cutoff)
 
-  // Chave: "tipo||label" (usa primeira label ou "__none__")
-  const counts: Record<string, { tipo: string; label: string | null; ocorrencias: number }> = {}
+  const counts: Record<string, { tema: string; ocorrencias: number; exemplos: string[] }> = {}
 
   for (const issue of recent) {
-    const label = issue.labels.length > 0 ? issue.labels[0] : null
-    const chave = `${issue.type}||${label ?? '__none__'}`
-    if (!counts[chave]) {
-      counts[chave] = { tipo: issue.type, label, ocorrencias: 0 }
+    const tema = extrairTema(issue.summary, compiledCategories)
+    if (!counts[tema]) {
+      counts[tema] = { tema, ocorrencias: 0, exemplos: [] }
     }
-    counts[chave].ocorrencias++
+    counts[tema].ocorrencias++
+    if (counts[tema].exemplos.length < 3) {
+      counts[tema].exemplos.push(issue.summary)
+    }
   }
 
   return Object.values(counts)
-    .filter((r) => r.ocorrencias > 2)
+    .filter((r) => r.ocorrencias > 1)
     .sort((a, b) => b.ocorrencias - a.ocorrencias)
+    .slice(0, 10)
 }
 
 /** Variante interna que retorna snapshot + issues raw para calcular spike (D-07) */
@@ -276,7 +279,7 @@ export async function fetchSupportBoardMetricsWithIssues(
   const complianceRate30d = calcularCompliance(issues, slaThresholds, 30)
 
   const inOutSemanal = calcularInOutSemanal(issues, IN_OUT_SEMANAS)
-  const recorrentesDetectados = detectarRecorrentes(issues, 30)
+  const recorrentesDetectados = detectarRecorrentes(issues, 30, compiled)
 
   const snapshot: Omit<SupportBoardSnapshot, 'alertas'> = {
     atualizadoEm: new Date().toISOString(),
@@ -349,13 +352,11 @@ export function calcularAlertas(
   for (const ticket of snapshot.ticketsEmBreach) {
     const threshold = slaThresholds[ticket.type] ?? DEFAULT_SLA_DIAS
     if (ticket.ageDias > ALRT_SLA_MULTIPLIER * threshold) {
-      const lastComment = ticket.recentComments.length > 0
-        ? {
-            author: ticket.recentComments[0].author,
-            body: ticket.recentComments[0].body.slice(0, 150),
-            created: ticket.recentComments[0].created,
-          }
-        : null
+      const comments = ticket.recentComments.length > 0
+        ? [...ticket.recentComments]
+            .reverse()
+            .map(c => ({ author: c.author, body: c.body, created: c.created }))
+        : undefined
       alertas.push({
         tipo: 'ticket_envelhecendo',
         mensagem: `${ticket.key}: ${ticket.ageDias}d aberto (limite ${threshold}d, threshold critico ${ALRT_SLA_MULTIPLIER * threshold}d)`,
@@ -364,7 +365,7 @@ export function calcularAlertas(
         summary: ticket.summary,
         status: ticket.status,
         assignee: ticket.assignee,
-        lastComment,
+        comments,
         jiraUrl: jiraBaseUrl ? `${jiraBaseUrl}/browse/${ticket.key}` : undefined,
       })
     }

@@ -27,7 +27,8 @@ ${comments}`
   const alertasStr = (snapshot.alertas ?? []).length > 0
     ? snapshot.alertas.map((a) => {
         if (a.summary) {
-          const commentNote = a.lastComment ? ` | Último comentário: "${a.lastComment.body.slice(0, 150)}" (${a.lastComment.author})` : ''
+          const lastComment = a.comments?.length ? a.comments[a.comments.length - 1] : null
+          const commentNote = lastComment ? ` | Último comentário: "${lastComment.body.slice(0, 150)}" (${lastComment.author})` : ''
           return `- [${a.severidade.toUpperCase()}] ${a.ticketKey}: ${a.summary} (${a.status ?? '?'}, ${a.assignee ?? 'sem assignee'})${commentNote}`
         }
         return `- [${a.severidade.toUpperCase()}] ${a.mensagem}`
