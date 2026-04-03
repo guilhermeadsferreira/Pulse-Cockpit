@@ -85,6 +85,28 @@ export class Scheduler {
           log.warn('daily report falhou', { error: err instanceof Error ? err.message : String(err) })
         }
       }
+
+      // Ticket analysis automático de sustentação (após daily report)
+      if (settings.jiraSupportProjectKey && settings.claudeBinPath) {
+        try {
+          log.info('ticket analysis de sustentação: iniciando')
+          const { runTicketAnalysisInternal } = await import('../index')
+          const result = await runTicketAnalysisInternal()
+          if (result.error) {
+            log.warn('ticket analysis de sustentação: erro', { error: result.error })
+          } else {
+            log.info('ticket analysis de sustentação: concluído', {
+              tickets: result.enrichedTickets?.length ?? 0,
+            })
+          }
+        } catch (err) {
+          log.warn('ticket analysis de sustentação falhou (não crítico)', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        }
+      } else {
+        log.debug('sustentação não configurada, pulando ticket analysis')
+      }
     }
 
     if (jiraEnabled && settings.jiraBoardId) {
